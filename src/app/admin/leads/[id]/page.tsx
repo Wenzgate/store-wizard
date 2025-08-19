@@ -1,15 +1,14 @@
 // src/app/admin/leads/[id]/page.tsx
 import { notFound } from "next/navigation";
-import {
-  PrismaClient,
-  type QuoteRequest as QuoteRequestModel,
-  type StoreItem,
-  type FileRef,
+import { prisma } from "@/lib/prisma";
+import type {
+  QuoteRequest as QuoteRequestModel,
+  StoreItem,
+  FileRef,
 } from "@prisma/client";
 
-// Prisma singleton (évite les connexions multiples en dev)
-const prisma = (globalThis as any).__prisma ?? new PrismaClient();
-if (!(globalThis as any).__prisma) (globalThis as any).__prisma = prisma;
+
+
 
 // Force dynamic pour éviter le cache lors de la consult des leads
 export const dynamic = "force-dynamic";
@@ -22,13 +21,13 @@ type LeadWithRelations = QuoteRequestModel & {
   files: FileRef[];
 };
 
-export async function generateMetadata({ params }: { params: Promise<Params> }) {
-  const { id } = await params;
+export async function generateMetadata({ params }: { params: Params }) {
+  const { id } = params;
   return { title: `Lead ${id} • Admin` };
 }
 
-export default async function Page({ params }: { params: Promise<Params> }) {
-  const { id } = await params;
+export default async function Page({ params }: { params: Params }) {
+  const { id } = params;
 
   const lead = (await prisma.quoteRequest.findUnique({
     where: { id },
