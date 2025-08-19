@@ -31,25 +31,19 @@ export const MAX_FILES = 6;
 export const MAX_FILES_PER_ITEM = 6;
 export const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5 Mo
 
-// Enums (as const)
-export const BudgetRangeEnum = z.enum(["LOW", "MID", "HIGH", "LUX"]) as z.ZodEnum<[BudgetRange, BudgetRange, BudgetRange, BudgetRange]>;
-export const TimingEnum = z.enum(["ASAP", "W2_4", "FLEX", "JUST_INFO"]) as z.ZodEnum<[Timing, Timing, Timing, Timing]>;
-export const StoreTypeEnum = z.enum(["VENETIAN", "ROMAN", "ROLLER", "PLEATED", "CASSETTE"]) as z.ZodEnum<
-  [StoreType, StoreType, StoreType, StoreType, StoreType]
->;
-export const MountTypeEnum = z.enum(["INSIDE", "OUTSIDE", "CEILING"]) as z.ZodEnum<[MountType, MountType, MountType]>;
-export const WindowTypeEnum = z.enum(["WINDOW_SINGLE", "WINDOW_DOOR", "BAY", "CORNER", "SKYLIGHT", "OTHER"]) as z.ZodEnum<
-  [WindowType, WindowType, WindowType, WindowType, WindowType, WindowType]
->;
-export const RoomTypeEnum = z.enum(["LIVING", "KITCHEN", "BEDROOM", "BATHROOM", "OFFICE", "OTHER"]) as z.ZodEnum<
-  [RoomType, RoomType, RoomType, RoomType, RoomType, RoomType]
->;
-export const ControlEnum = z.enum(["CHAIN", "MOTOR", "CRANK", "SPRING"]) as z.ZodEnum<[Control, Control, Control, Control]>;
-export const ControlSideEnum = z.enum(["LEFT", "RIGHT"]) as z.ZodEnum<[ControlSide, ControlSide]>;
-export const MotorPowerEnum = z.enum(["WIRED", "BATTERY", "SOLAR"]) as z.ZodEnum<[MotorPower, MotorPower, MotorPower]>;
-export const FabricOpacityEnum = z.enum(["SHEER", "TRANSLUCENT", "DIMOUT", "BLACKOUT", "SCREEN"]) as z.ZodEnum<
-  [FabricOpacity, FabricOpacity, FabricOpacity, FabricOpacity, FabricOpacity]
->;
+// --- Enums (z.enum) ---
+// ⚠️ Ne pas caster vers ZodEnum<[...]> avec des types TS, ça casse Zod v4 classic.
+// On garde les valeurs brutes ; les types TS restent séparés dans "@/types/quote".
+export const BudgetRangeEnum = z.enum(["LOW", "MID", "HIGH", "LUX"]);
+export const TimingEnum = z.enum(["ASAP", "W2_4", "FLEX", "JUST_INFO"]);
+export const StoreTypeEnum = z.enum(["VENETIAN", "ROMAN", "ROLLER", "PLEATED", "CASSETTE"]);
+export const MountTypeEnum = z.enum(["INSIDE", "OUTSIDE", "CEILING"]);
+export const WindowTypeEnum = z.enum(["WINDOW_SINGLE", "WINDOW_DOOR", "BAY", "CORNER", "SKYLIGHT", "OTHER"]);
+export const RoomTypeEnum = z.enum(["LIVING", "KITCHEN", "BEDROOM", "BATHROOM", "OFFICE", "OTHER"]);
+export const ControlEnum = z.enum(["CHAIN", "MOTOR", "CRANK", "SPRING"]);
+export const ControlSideEnum = z.enum(["LEFT", "RIGHT"]);
+export const MotorPowerEnum = z.enum(["WIRED", "BATTERY", "SOLAR"]);
+export const FabricOpacityEnum = z.enum(["SHEER", "TRANSLUCENT", "DIMOUT", "BLACKOUT", "SCREEN"]);
 
 // Fichier
 export const FileRefSchema = z.object({
@@ -63,7 +57,8 @@ export const FileRefSchema = z.object({
   ]),
   size: z.number().int().nonnegative().max(MAX_FILE_SIZE_BYTES),
   url: z.string().url().optional(),
-}) satisfies z.ZodType<FileRef>;
+});
+// (on ne force pas avec `satisfies z.ZodType<FileRef>` pour éviter des incompatibilités internes)
 
 // Tissu & couleur
 export const FabricSchema = z.object({
@@ -77,14 +72,16 @@ export const FabricSchema = z.object({
 });
 
 export const ColorPreferenceSchema = z.object({
-  tone: z.union([
-    z.literal("WHITE"),
-    z.literal("NEUTRAL"),
-    z.literal("WARM"),
-    z.literal("COOL"),
-    z.literal("DARK"),
-    z.literal("CUSTOM"),
-  ]).optional(),
+  tone: z
+    .union([
+      z.literal("WHITE"),
+      z.literal("NEUTRAL"),
+      z.literal("WARM"),
+      z.literal("COOL"),
+      z.literal("DARK"),
+      z.literal("CUSTOM"),
+    ])
+    .optional(),
   custom: z.string().trim().nullable().optional(),
 });
 
@@ -119,7 +116,8 @@ export const StoreItemSchema = z.object({
   dims: DimensionsSchema,
   notes: z.string().trim().nullable().optional(),
   files: z.array(FileRefSchema).max(MAX_FILES_PER_ITEM).optional(),
-}) satisfies z.ZodType<StoreItem>;
+});
+// (on évite `satisfies z.ZodType<StoreItem>` qui rigidifie trop les internes de Zod v4)
 
 // Contact
 export const ContactPreferenceEnum = z.enum(["EMAIL", "PHONE", "WHATSAPP"]);
@@ -162,9 +160,8 @@ export const QuoteRequestSchema = z
     customer: CustomerInfoSchema,
     project: ProjectInfoSchema.nullable().optional(),
     files: z.array(FileRefSchema).max(MAX_FILES).optional(),
-    consentRgpd: z.literal(true, {
-      errorMap: () => ({ message: "Le consentement RGPD est requis." }),
-    }),
+    // Zod v4 "classic": on utilise { message } et pas { errorMap }
+    consentRgpd: z.literal(true, { message: "Le consentement RGPD est requis." }),
     acceptEstimateOnly: z.boolean().optional(),
     source: z.union([z.literal("WIDGET"), z.literal("WEBSITE"), z.literal("OTHER")]).optional(),
     locale: z.union([z.literal("fr"), z.literal("en"), z.literal("nl")]).optional(),
@@ -199,11 +196,12 @@ export const QuoteRequestSchema = z
         });
       }
     });
-  }) satisfies z.ZodType<QuoteRequest>;
+  });
 
 // Parse helpers
 export function parseQuoteRequest(input: unknown): QuoteRequest {
-  return QuoteRequestSchema.parse(input);
+  // TS accepte structurellement si QuoteRequest ~ z.infer<typeof QuoteRequestSchema>
+  return QuoteRequestSchema.parse(input) as QuoteRequest;
 }
 export function safeParseQuoteRequest(input: unknown) {
   return QuoteRequestSchema.safeParse(input);

@@ -1,12 +1,16 @@
 // src/app/devis/page.tsx
 "use client";
-import { useFormContext as useRHFContext } from "react-hook-form";
+
+import { z } from "zod";
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import { FormProvider, useForm } from "react-hook-form";
+import { FormProvider, useForm, useFormContext as useRHFContext } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { motion, AnimatePresence } from "framer-motion";
+
 import Stepper from "@/components/ui/Stepper";
 import HelpTooltip from "@/components/ui/HelpTooltip";
 import StoreItemRepeater from "@/components/forms/StoreItemRepeater";
+
 import {
   QuoteRequestSchema,
   TimingEnum,
@@ -15,10 +19,13 @@ import {
   MIN_DIM_CM,
   MAX_DIM_CM,
 } from "@/schemas/quote";
-import type { QuoteRequest, StoreItem } from "@/types/quote";
-import { motion, AnimatePresence } from "framer-motion";
+import type { StoreItem } from "@/types/quote";
 
-// ---------- Constants & Utils ----------
+// ---------- Types & Const ----------
+
+// ⚠️ IMPORTANT: on tape le formulaire avec le "type d'entrée" du schéma Zod.
+// Cela permet d'avoir consentRgpd: false par défaut tout en validant z.literal(true) au submit.
+type QuoteFormValues = z.input<typeof QuoteRequestSchema>;
 
 const DRAFT_KEY = "quote_draft_v1";
 
@@ -58,14 +65,16 @@ function track(event: string, payload: Record<string, unknown> = {}) {
 }
 
 function uid() {
-  return typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : Math.random().toString(36).slice(2);
+  return typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : Math.random().toString(36).slice(2);
 }
 
-/** Retire les File temporaires du brouillon pour pouvoir serialiser en localStorage */
-function stripFilesForDraft(data: QuoteRequest): QuoteRequest {
-  const clone: QuoteRequest = JSON.parse(JSON.stringify({ ...data, files: undefined }));
+/** Retire les File temporaires du brouillon pour pouvoir sérialiser en localStorage */
+function stripFilesForDraft(data: QuoteFormValues): QuoteFormValues {
+  const clone: QuoteFormValues = JSON.parse(JSON.stringify({ ...data, files: undefined as any }));
   if (clone.items) {
-    clone.items = clone.items.map((it) => ({ ...it, files: undefined }));
+    clone.items = clone.items.map((it: any) => ({ ...it, files: undefined as any }));
   }
   return clone;
 }
@@ -104,22 +113,43 @@ function cn(...a: Array<string | false | null | undefined>) {
 
 export default function DevisPage() {
   const [currentIdx, setCurrentIdx] = useState(0);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
   const currentStep = STEPS[currentIdx];
 
-  const form = useForm<QuoteRequest>({
-    resolver: zodResolver(QuoteRequestSchema.partial()), // validation globale stricte seulement à l’envoi final
+  const form = useForm<QuoteFormValues>({
+    resolver: zodResolver(QuoteRequestSchema),
+    mode: "onSubmit",
     defaultValues: {
+      id: undefined,
+      createdAt: undefined,
       items: [],
       files: [],
-      project: { address: { country: "BE" } },
-      customer: { firstName: "", lastName: "", email: "" },
-      consentRgpd: false,
+      customer: {
+        firstName: "",
+        lastName: "",
+        email: "",
+        phone: "",
+        contactPref: "" as any, // l’utilisateur choisira
+      },
+      project: {
+        address: {
+          street: "",
+          postalCode: "",
+          city: "",
+          country: "Belgique",
+        },
+        timing: "" as any, // l’utilisateur choisira
+        budget: "" as any, // l’utilisateur choisira
+        notes: "",
+      },
+      
       acceptEstimateOnly: true,
-      source: "WEBSITE",
-      locale: "fr",
       honeypot: "",
+      source: "WEBSITE" as any,
+      locale: "fr",
     },
-    mode: "onBlur",
   });
 
   const { handleSubmit, watch, setValue, getValues, reset, formState } = form;
@@ -130,7 +160,7 @@ export default function DevisPage() {
     const raw = localStorage.getItem(DRAFT_KEY);
     if (raw) {
       try {
-        const parsed = JSON.parse(raw) as { data: QuoteRequest; step?: StepId };
+        const parsed = JSON.parse(raw) as { data: QuoteFormValues; step?: StepId };
         reset(parsed.data);
         const idx = Math.max(0, STEPS.findIndex((s) => s.id === (parsed.step ?? "intro")));
         setCurrentIdx(idx === -1 ? 0 : idx);
@@ -144,7 +174,7 @@ export default function DevisPage() {
   useEffect(() => {
     if (!didHydrateRef.current) return;
     const sub = watch((value) => {
-      const toSave = stripFilesForDraft(value as QuoteRequest);
+      const toSave = stripFilesForDraft(value as QuoteFormValues);
       localStorage.setItem(DRAFT_KEY, JSON.stringify({ data: toSave, step: STEPS[currentIdx].id }));
     });
     return () => sub.unsubscribe();
@@ -152,7 +182,6 @@ export default function DevisPage() {
 
   // ---- Handlers
   const goNext = async () => {
-    // validation step-by-step légère
     const ok = await validateStep(currentStep.id);
     if (!ok) return;
     setCurrentIdx((i) => Math.min(i + 1, STEPS.length - 1));
@@ -188,7 +217,6 @@ export default function DevisPage() {
   async function validateStep(stepId: StepId): Promise<boolean> {
     const v = getValues();
     if (stepId === "projectType") {
-      // no hard requirement (notes facultatives)
       return true;
     }
     if (stepId === "quantity") {
@@ -200,7 +228,6 @@ export default function DevisPage() {
       return true;
     }
     if (stepId === "items") {
-      // validation simple: chaque item doit avoir dimensions valides
       for (const it of v.items ?? []) {
         if (!it?.dims) return false;
         if (it.dims.width < MIN_DIM_CM || it.dims.width > MAX_DIM_CM) return false;
@@ -209,12 +236,10 @@ export default function DevisPage() {
       return true;
     }
     if (stepId === "timing") {
-      // optional
       return true;
     }
     if (stepId === "contact") {
-      // email & noms & consent
-      const c = v.customer;
+      const c = v.customer as any;
       if (!c?.firstName || !c?.lastName || !c?.email) {
         alert("Merci de compléter vos coordonnées (prénom, nom, email).");
         return false;
@@ -228,15 +253,18 @@ export default function DevisPage() {
     return true;
   }
 
-  // ---- Final submit (no API yet → stub & confirmation)
-  const onSubmit = async (data: QuoteRequest) => {
+  // ---- Final submit
+  const onSubmit = async (data: QuoteFormValues) => {
+    setIsSubmitting(true);
+    setSubmitError(null);
+
     // transformer File[] temporaires en FileRef minimal (id/name/mime/size)
-    const payload: QuoteRequest = {
+    const payload: QuoteFormValues = {
       ...data,
-      items: (data.items ?? []).map((it) => ({
+      items: (data.items ?? []).map((it: any) => ({
         ...it,
-        files: Array.isArray((it as any).files)
-          ? ((it as any).files as File[]).map((f) => ({
+        files: Array.isArray(it.files)
+          ? (it.files as File[]).map((f) => ({
               id: uid(),
               name: f.name,
               mime: (f.type || "application/pdf") as any,
@@ -254,45 +282,52 @@ export default function DevisPage() {
         : undefined,
     };
 
-    // Validation stricte complète
+    // Validation stricte complète (sortie schéma)
     const parsed = QuoteRequestSchema.safeParse(payload);
     if (!parsed.success) {
       console.error(parsed.error.flatten());
       alert("Certaines informations sont manquantes ou invalides. Vérifiez le formulaire.");
+      setIsSubmitting(false);
       jumpTo("items");
       return;
     }
 
-    // Stub submit (API arrivera au lot dédié)
-    // APPEL API RÉEL
-const res = await fetch("/api/quote", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(parsed.data),
-  });
-  
-  if (!res.ok) {
-    const msg = await safeReadError(res);
-    setSubmitError(`Échec d’envoi: ${msg}`);
-    return;
-  }
-  
-  track("quote_submit", { items: parsed.data.items.length });
-  localStorage.removeItem(DRAFT_KEY);
-  setCurrentIdx(STEPS.findIndex((s) => s.id === "done"));
-  
-      
+    try {
+      const res = await fetch("/api/quote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(parsed.data),
+      });
+
+      if (!res.ok) {
+        const msg = await safeReadError(res);
+        setSubmitError(`Échec d’envoi: ${msg}`);
+        setIsSubmitting(false);
+        return;
+      }
+
+      track("quote_submit", { items: parsed.data.items.length });
+      localStorage.removeItem(DRAFT_KEY);
+      setCurrentIdx(STEPS.findIndex((s) => s.id === "done"));
+    } catch (e: any) {
+      setSubmitError(e?.message ?? "Erreur réseau");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   async function safeReadError(res: Response) {
     try {
-      const j = await res.json();
-      return j?.error || res.statusText || `HTTP ${res.status}`;
+      const ct = res.headers.get("content-type") || "";
+      if (ct.includes("application/json")) {
+        const j = await res.json();
+        return j?.error || j?.message || JSON.stringify(j);
+      }
+      return await res.text();
     } catch {
       return res.statusText || `HTTP ${res.status}`;
     }
   }
-  
 
   // ---- Derived
   const stepperData = useMemo(
@@ -341,10 +376,10 @@ const res = await fetch("/api/quote", {
             <button
               type="button"
               onClick={goBack}
-              disabled={currentIdx === 0}
+              disabled={currentIdx === 0 || isSubmitting}
               className={cn(
                 "rounded-xl border border-border px-4 py-2 text-sm hover:bg-black/5 dark:hover:bg:white/10 focus:outline-none focus:ring-2 focus:ring-[hsl(var(--brand))]",
-                currentIdx === 0 && "opacity-50"
+                (currentIdx === 0 || isSubmitting) && "opacity-50"
               )}
             >
               Retour
@@ -353,20 +388,28 @@ const res = await fetch("/api/quote", {
             {currentStep.id === "recap" ? (
               <button
                 type="submit"
-                className="rounded-xl bg-[hsl(var(--brand))] px-5 py-2 text-sm font-semibold text-[hsl(var(--brand-foreground))] hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[hsl(var(--brand))]"
+                disabled={isSubmitting}
+                className="rounded-xl bg-[hsl(var(--brand))] px-5 py-2 text-sm font-semibold text-[hsl(var(--brand-foreground))] hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[hsl(var(--brand))] disabled:opacity-60"
               >
-                Envoyer la demande
+                {isSubmitting ? "Envoi…" : "Envoyer la demande"}
               </button>
             ) : (
               <button
                 type="button"
                 onClick={goNext}
-                className="rounded-xl bg-[hsl(var(--brand))] px-5 py-2 text-sm font-semibold text-[hsl(var(--brand-foreground))] hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[hsl(var(--brand))]"
+                disabled={isSubmitting}
+                className="rounded-xl bg-[hsl(var(--brand))] px-5 py-2 text-sm font-semibold text-[hsl(var(--brand-foreground))] hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[hsl(var(--brand))] disabled:opacity-60"
               >
                 Continuer
               </button>
             )}
           </div>
+        )}
+
+        {submitError && (
+          <p className="mt-3 text-sm text-red-600" role="alert">
+            {submitError}
+          </p>
         )}
 
         {/* Debug small */}
@@ -383,7 +426,10 @@ const res = await fetch("/api/quote", {
 function StepIntro({ onStart }: { onStart: () => void }) {
   return (
     <section className="space-y-4">
-      <p>👋 Bienvenue chez Anderlecht Décor ! Répondez à quelques questions (2–3 min) pour une estimation indicative BANDALUX.</p>
+      <p>
+        👋 Bienvenue chez Anderlecht Décor ! Répondez à quelques questions (2–3 min) pour une
+        estimation indicative BANDALUX.
+      </p>
       <ul className="list-disc pl-5 text-sm text-muted">
         <li>1 question à la fois, ton simple et clair.</li>
         <li>“Je ne sais pas” disponible avec mini‑aides.</li>
@@ -414,10 +460,10 @@ function StepIntro({ onStart }: { onStart: () => void }) {
 
 function StepProjectType() {
   const { register, setValue, watch } = useFormContextStrict();
-  const note = watch("project?.notes") ?? "";
+  const note = watch("project.notes") ?? "";
 
   const addTag = (t: string) => {
-    const cur = watch("project?.notes") ?? "";
+    const cur = watch("project.notes") ?? "";
     const pref = cur.includes("[Projet]") ? cur : `[Projet:${t}] ` + cur;
     setValue("project.notes" as any, pref, { shouldDirty: true });
   };
@@ -445,7 +491,12 @@ function StepProjectType() {
           placeholder="Ajoutez des précisions utiles (ex: orientation soleil, contraintes)."
         />
         <Idk hint="Vous hésitez ? Laissez vide, on clarifiera par téléphone." />
-        {note && <p className="mt-2 text-xs text-muted">Tag projet ajouté dans les notes : <code className="rounded bg-black/5 px-1 py-0.5">[Projet…]</code></p>}
+        {note && (
+          <p className="mt-2 text-xs text-muted">
+            Tag projet ajouté dans les notes :{" "}
+            <code className="rounded bg-black/5 px-1 py-0.5">[Projet…]</code>
+          </p>
+        )}
       </div>
     </section>
   );
@@ -497,23 +548,23 @@ function StepItems() {
     <section className="space-y-4">
       <div className="flex items-center gap-2">
         <h2 className="text-lg font-semibold">Détails des stores</h2>
-        <HelpTooltip content={`Mesurez en cm (min ${MIN_DIM_CM} – max ${MAX_DIM_CM}). En cas de doute, utilisez “Je ne sais pas”.`} />
+        <HelpTooltip
+          content={`Mesurez en cm (min ${MIN_DIM_CM} – max ${MAX_DIM_CM}). En cas de doute, utilisez “Je ne sais pas”.`}
+        />
       </div>
       <p className="text-sm text-muted">
         Astuce: si vous hésitez sur la pose tableau vs recouvrement, cliquez sur le “?” à côté de l’étiquette.
       </p>
       <StoreItemRepeater />
-      <Idk
-        hint="Vous n’êtes pas sûr des dimensions ? Donnez une estimation. Nous confirmerons lors d’une éventuelle visite."
-      />
+      <Idk hint="Vous n’êtes pas sûr des dimensions ? Donnez une estimation. Nous confirmerons lors d’une éventuelle visite." />
     </section>
   );
 }
 
 function StepTiming() {
   const { register, watch } = useFormContextStrict();
-  const t = watch("project?.timing");
-  const b = watch("project?.budget");
+  const t = watch("project.timing");
+  const b = watch("project.budget");
 
   return (
     <section className="space-y-4">
@@ -525,14 +576,16 @@ function StepTiming() {
           <select
             {...register("project.timing" as const)}
             className="w-full rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
-            defaultValue={t ?? ""}
           >
             <option value="">—</option>
-            {(TimingEnum.options as readonly string[]).map((v) => (
-              <option key={v} value={v}>
-                {timingLabel(v)}
-              </option>
-            ))}
+            {TimingEnum.options.map((v) => {
+              const val = v as (typeof TimingEnum)["options"][number];
+              return (
+                <option key={String(val)} value={String(val)}>
+                  {timingLabel(val)}
+                </option>
+              );
+            })}
           </select>
         </div>
 
@@ -541,14 +594,16 @@ function StepTiming() {
           <select
             {...register("project.budget" as const)}
             className="w-full rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
-            defaultValue={b ?? ""}
           >
             <option value="">—</option>
-            {(BudgetRangeEnum.options as readonly string[]).map((v) => (
-              <option key={v} value={v}>
-                {budgetLabel(v)}
-              </option>
-            ))}
+            {BudgetRangeEnum.options.map((v) => {
+              const val = v as (typeof BudgetRangeEnum)["options"][number];
+              return (
+                <option key={String(val)} value={String(val)}>
+                  {budgetLabel(val)}
+                </option>
+              );
+            })}
           </select>
         </div>
       </div>
@@ -609,9 +664,9 @@ function StepContact() {
             className="w-full rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
           >
             <option value="">—</option>
-            {(ContactPreferenceEnum.options as readonly string[]).map((v) => (
-              <option key={v} value={v}>
-                {contactPrefLabel(v)}
+            {ContactPreferenceEnum.options.map((v) => (
+              <option key={String(v)} value={String(v)}>
+                {contactPrefLabel(v as (typeof ContactPreferenceEnum)["options"][number])}
               </option>
             ))}
           </select>
@@ -653,7 +708,11 @@ function StepContact() {
           J’accepte que mes données soient utilisées pour me recontacter dans le cadre de cette demande.
         </label>
         <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" {...register("acceptEstimateOnly" as const)} className="h-4 w-4 rounded border-border" />
+          <input
+            type="checkbox"
+            {...register("acceptEstimateOnly" as const)}
+            className="h-4 w-4 rounded border-border"
+          />
           Je comprends qu’il s’agit d’une estimation indicative, sans valeur contractuelle.
         </label>
         {/* Honeypot */}
@@ -703,8 +762,8 @@ function StepRecap({ onEdit }: { onEdit: (id: StepId) => void }) {
       <div className="rounded-2xl border border-border p-4">
         <h3 className="mb-2 text-sm font-medium">Coordonnées</h3>
         <p className="text-sm">
-          {v.customer.firstName} {v.customer.lastName} — {v.customer.email}
-          {v.customer.phone ? ` — ${v.customer.phone}` : ""}
+          {v.customer?.firstName} {v.customer?.lastName} — {v.customer?.email}
+          {v.customer?.phone ? ` — ${v.customer.phone}` : ""}
         </p>
         <p className="text-sm text-muted">
           {[
@@ -717,8 +776,8 @@ function StepRecap({ onEdit }: { onEdit: (id: StepId) => void }) {
             .join(", ") || "Adresse non précisée"}
         </p>
         <div className="mt-2 flex flex-wrap gap-2 text-xs">
-          {v.project?.timing && <Badge>{timingLabel(v.project.timing)}</Badge>}
-          {v.project?.budget && <Badge>{budgetLabel(v.project.budget)}</Badge>}
+          {v.project?.timing && <Badge>{timingLabel(v.project.timing as any)}</Badge>}
+          {v.project?.budget && <Badge>{budgetLabel(v.project.budget as any)}</Badge>}
         </div>
         <div className="mt-2">
           <button
@@ -733,8 +792,8 @@ function StepRecap({ onEdit }: { onEdit: (id: StepId) => void }) {
 
       {/* Items */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        {(v.items ?? []).map((it, i) => (
-          <article key={it.id ?? i} className="rounded-2xl border border-border p-4">
+        {(v.items ?? []).map((it: any, i: number) => (
+          <article key={it?.id ?? i} className="rounded-2xl border border-border p-4">
             <div className="mb-2 flex items-center justify-between">
               <h4 className="text-sm font-semibold">Store #{i + 1}</h4>
               <button
@@ -746,14 +805,20 @@ function StepRecap({ onEdit }: { onEdit: (id: StepId) => void }) {
               </button>
             </div>
             <dl className="space-y-1 text-sm">
-              <Row label="Type">{typeLabel(it.type)}</Row>
+              <Row label="Type">{typeLabel(it.type as any)}</Row>
               <Row label="Quantité">{it.quantity}</Row>
-              <Row label="Pose">{mountLabel(it.mount)}</Row>
-              {it.windowType && <Row label="Ouverture">{windowLabel(it.windowType)}</Row>}
-              {it.room && <Row label="Pièce">{roomLabel(it.room)}{it.roomLabel ? ` (${it.roomLabel})` : ""}</Row>}
-              <Row label="Commande">{controlLabel(it)}</Row>
+              <Row label="Pose">{mountLabel(it.mount as any)}</Row>
+              {it.windowType && <Row label="Ouverture">{windowLabel(it.windowType as any)}</Row>}
+              {it.room && (
+                <Row label="Pièce">
+                  {roomLabel(it.room as any)}
+                  {it.roomLabel ? ` (${it.roomLabel})` : ""}
+                </Row>
+              )}
+              <Row label="Commande">{controlLabel(it as any)}</Row>
               <Row label="Dimensions">
-                {it.dims?.width} × {it.dims?.height} cm{it.dims?.toleranceCm != null ? ` (± ${it.dims.toleranceCm} cm)` : ""}
+                {it.dims?.width} × {it.dims?.height} cm
+                {it.dims?.toleranceCm != null ? ` (± ${it.dims.toleranceCm} cm)` : ""}
               </Row>
               {it.fabric && (
                 <Row label="Tissu">
@@ -762,8 +827,16 @@ function StepRecap({ onEdit }: { onEdit: (id: StepId) => void }) {
                     .join(" · ")}
                 </Row>
               )}
-              {it.color?.tone && <Row label="Couleur">{it.color.tone === "CUSTOM" ? it.color.custom ?? "Personnalisée" : it.color.tone}</Row>}
-              {it.notes && <Row label="Notes"><em>{it.notes}</em></Row>}
+              {it.color?.tone && (
+                <Row label="Couleur">
+                  {it.color.tone === "CUSTOM" ? it.color.custom ?? "Personnalisée" : (it.color.tone as any)}
+                </Row>
+              )}
+              {it.notes && (
+                <Row label="Notes">
+                  <em>{it.notes}</em>
+                </Row>
+              )}
             </dl>
           </article>
         ))}
@@ -796,9 +869,13 @@ function StepDone() {
     <section className="space-y-3 text-center">
       <h2 className="text-lg font-semibold">Merci 🙌</h2>
       <p className="text-sm text-muted">
-        Votre demande a été envoyée. Un conseiller Anderlecht Décor reviendra vers vous rapidement pour affiner l’estimation.
+        Votre demande a été envoyée. Un conseiller Anderlecht Décor reviendra vers vous rapidement
+        pour affiner l’estimation.
       </p>
-      <a href="/" className="inline-block rounded-xl border border-border px-4 py-2 text-sm hover:bg-black/5 dark:hover:bg-white/10">
+      <a
+        href="/"
+        className="inline-block rounded-xl border border-border px-4 py-2 text-sm hover:bg-black/5 dark:hover:bg-white/10"
+      >
         Retour à l’accueil
       </a>
     </section>
@@ -853,7 +930,11 @@ function Idk({
 }
 
 function Badge({ children }: { children: React.ReactNode }) {
-  return <span className="inline-flex items-center rounded-full border border-border px-2 py-0.5 text-xs">{children}</span>;
+  return (
+    <span className="inline-flex items-center rounded-full border border-border px-2 py-0.5 text-xs">
+      {children}
+    </span>
+  );
 }
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
@@ -885,7 +966,7 @@ function mountLabel(v: StoreItem["mount"]) {
       OUTSIDE: "Pose murale (recouvrement)",
       CEILING: "Pose plafond",
     } as const
-  )[v];
+ )[v];
 }
 function windowLabel(v: NonNullable<StoreItem["windowType"]>) {
   return (
@@ -917,46 +998,53 @@ function controlLabel(it: StoreItem) {
   if (it.control === "CRANK") return "Manivelle" + side;
   if (it.control === "MOTOR") {
     const power =
-      it.motor?.power === "WIRED" ? " — filaire" : it.motor?.power === "BATTERY" ? " — batterie" : it.motor?.power === "SOLAR" ? " — solaire" : "";
-    const brand = it.motor?.brand ? ` (${it.motor.brand})` : "";
+      (it as any).motor?.power === "WIRED"
+        ? " — filaire"
+        : (it as any).motor?.power === "BATTERY"
+        ? " — batterie"
+        : (it as any).motor?.power === "SOLAR"
+        ? " — solaire"
+        : "";
+    const brand = (it as any).motor?.brand ? ` (${(it as any).motor.brand})` : "";
     return "Motorisation" + power + brand;
   }
   return "Ressort";
 }
+
+// Enums -> labels
 function timingLabel(v: (typeof TimingEnum)["options"][number]) {
-  return (
-    {
-      ASAP: "Dès que possible",
-      W2_4: "Sous 2–4 semaines",
-      FLEX: "Flexible",
-      JUST_INFO: "Information uniquement",
-    } as const
-  )[v];
+  const map: Record<string, string> = {
+    ASAP: "Dès que possible",
+    W2_4: "Sous 2–4 semaines",
+    FLEX: "Flexible",
+    JUST_INFO: "Information uniquement",
+  };
+  return map[String(v)] ?? String(v);
 }
+
 function budgetLabel(v: (typeof BudgetRangeEnum)["options"][number]) {
-  return (
-    {
-      LOW: "Budget serré",
-      MID: "Standard",
-      HIGH: "Premium",
-      LUX: "Haut de gamme",
-    } as const
-  )[v];
+  const map: Record<string, string> = {
+    LOW: "Budget serré",
+    MID: "Standard",
+    HIGH: "Premium",
+    LUX: "Haut de gamme",
+  };
+  return map[String(v)] ?? String(v);
 }
+
 function contactPrefLabel(v: (typeof ContactPreferenceEnum)["options"][number]) {
-  return (
-    {
-      EMAIL: "Email",
-      PHONE: "Téléphone",
-      WHATSAPP: "WhatsApp",
-    } as const
-  )[v];
+  const map: Record<string, string> = {
+    EMAIL: "Email",
+    PHONE: "Téléphone",
+    WHATSAPP: "WhatsApp",
+  };
+  return map[String(v)] ?? String(v);
 }
 
 // ---------- RHF helper ----------
 
 function useFormContextStrict() {
-  const ctx = useRHFContext<QuoteRequest>();
+  const ctx = useRHFContext<QuoteFormValues>();
   if (!ctx || !(ctx as any).register) {
     // Aide au debug si un jour un sous-composant est rendu en dehors du provider
     throw new Error("useFormContextStrict must be used within a <FormProvider>.");

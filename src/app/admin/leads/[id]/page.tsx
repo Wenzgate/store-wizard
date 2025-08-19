@@ -1,159 +1,171 @@
-import { PrismaClient } from "@prisma/client";
-import Link from "next/link";
+// src/app/admin/leads/[id]/page.tsx
+import { notFound } from "next/navigation";
+import {
+  PrismaClient,
+  type QuoteRequest as QuoteRequestModel,
+  type StoreItem,
+  type FileRef,
+} from "@prisma/client";
 
-const prisma = new PrismaClient();
+// Prisma singleton (évite les connexions multiples en dev)
+const prisma = (globalThis as any).__prisma ?? new PrismaClient();
+if (!(globalThis as any).__prisma) (globalThis as any).__prisma = prisma;
 
+// Force dynamic pour éviter le cache lors de la consult des leads
 export const dynamic = "force-dynamic";
 
-export default async function LeadDetailPage({ params }: { params: { id: string } }) {
-  const id = params.id;
+type Params = { id: string };
 
-  const lead = await prisma.quoteRequest.findUnique({
-    where: { id },
-    include: {
-      items: {
-        include: { files: true },
-        orderBy: { createdAt: "asc" },
-      },
-      files: true,
-    },
-  });
+// Typage fort du résultat avec relations
+type LeadWithRelations = QuoteRequestModel & {
+  items: StoreItem[];
+  files: FileRef[];
+};
 
-  if (!lead) {
-    return (
-      <main className="mx-auto max-w-4xl p-4">
-        <p className="text-sm">Lead introuvable.</p>
-        <Link href="/admin/leads" className="mt-3 inline-block rounded-md border border-border px-3 py-1.5 text-sm">
-          ← Retour
-        </Link>
-      </main>
-    );
-  }
-
-  return (
-    <main className="mx-auto max-w-4xl p-4 space-y-6">
-      <header className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Lead #{lead.id.slice(0, 8)}</h1>
-        <Link href="/admin/leads" className="rounded-md border border-border px-3 py-1.5 text-sm">
-          ← Retour à la liste
-        </Link>
-      </header>
-
-      {/* Infos client */}
-      <section className="rounded-2xl border border-border p-4">
-        <h2 className="mb-2 text-sm font-semibold">Client</h2>
-        <dl className="grid grid-cols-[140px,1fr] gap-2 text-sm">
-          <Row k="Nom" v={`${lead.firstName} ${lead.lastName}`} />
-          <Row k="Email" v={lead.email} />
-          <Row k="Téléphone" v={lead.phone ?? "—"} />
-          <Row
-            k="Adresse"
-            v={[lead.street, lead.postalCode, lead.city, lead.country].filter(Boolean).join(", ") || "—"}
-          />
-          <Row k="Statut" v={lead.status} />
-          <Row k="Créé" v={new Date(lead.createdAt).toLocaleString("fr-BE")} />
-          <Row k="Langue" v={lead.locale ?? "—"} />
-          <Row k="Source" v={lead.source ?? "—"} />
-        </dl>
-        {lead.notes ? <p className="mt-2 text-sm"><strong>Notes:</strong> {lead.notes}</p> : null}
-      </section>
-
-      {/* Items */}
-      <section className="space-y-3">
-        <h2 className="text-sm font-semibold">Stores ({lead.items.length})</h2>
-        {lead.items.map((it, idx) => (
-          <article key={it.id} className="rounded-2xl border border-border p-4">
-            <h3 className="mb-2 text-sm font-semibold">Store #{idx + 1}</h3>
-            <dl className="grid grid-cols-[160px,1fr] gap-2 text-sm">
-              <Row k="Type" v={it.type} />
-              <Row k="Quantité" v={String(it.quantity)} />
-              <Row k="Pose" v={it.mount} />
-              {it.windowType ? <Row k="Ouverture" v={it.windowType} /> : null}
-              {it.room || it.roomLabel ? <Row k="Pièce" v={[it.room, it.roomLabel].filter(Boolean).join(" / ")} /> : null}
-              <Row
-                k="Dimensions"
-                v={`${it.width} × ${it.height} cm${it.toleranceCm != null ? ` (± ${it.toleranceCm} cm)` : ""}`}
-              />
-              <Row k="Commande" v={it.control + (it.controlSide ? ` (${it.controlSide})` : "")} />
-              {(it.motorBrand || it.motorPower || it.motorNotes) ? (
-                <Row
-                  k="Motorisation"
-                  v={[it.motorBrand, it.motorPower, it.motorNotes].filter(Boolean).join(" · ")}
-                />
-              ) : null}
-              {(it.fabricBrand || it.fabricCollection || it.fabricColorName || it.fabricColorCode || it.fabricOpacity) ? (
-                <Row
-                  k="Tissu"
-                  v={[
-                    it.fabricBrand,
-                    it.fabricCollection,
-                    it.fabricColorName,
-                    it.fabricColorCode,
-                    it.fabricOpacity ? `(${it.fabricOpacity})` : "",
-                    it.fabricOpennessPct != null ? `${it.fabricOpennessPct}%` : "",
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
-                />
-              ) : null}
-              {it.colorTone || it.colorCustom ? <Row k="Couleur" v={[it.colorTone, it.colorCustom].filter(Boolean).join(" / ")} /> : null}
-              {it.notes ? <Row k="Notes" v={it.notes} /> : null}
-            </dl>
-
-            {it.files.length ? (
-              <div className="mt-2">
-                <p className="text-sm font-medium">Fichiers ({it.files.length})</p>
-                <ul className="list-inside list-disc text-sm">
-                  {it.files.map((f) => (
-                    <li key={f.id}>
-                      <a href={f.url ?? "#"} target="_blank" rel="noreferrer" className="underline">
-                        {f.name}
-                      </a>{" "}
-                      — {f.mime} — {(f.size / 1024).toFixed(0)} Ko
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-          </article>
-        ))}
-      </section>
-
-      {/* Fichiers globaux */}
-      {lead.files.length ? (
-        <section className="rounded-2xl border border-border p-4">
-          <h2 className="mb-2 text-sm font-semibold">Fichiers globaux ({lead.files.length})</h2>
-          <ul className="list-inside list-disc text-sm">
-            {lead.files.map((f) => (
-              <li key={f.id}>
-                <a href={f.url ?? "#"} target="_blank" rel="noreferrer" className="underline">
-                  {f.name}
-                </a>{" "}
-                — {f.mime} — {(f.size / 1024).toFixed(0)} Ko
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-
-      {/* Payload brut */}
-      <section className="rounded-2xl border border-border p-4">
-        <details>
-          <summary className="cursor-pointer text-sm font-semibold">Voir payload brut</summary>
-          <pre className="mt-2 max-h-96 overflow-auto rounded-md bg-black/5 p-3 text-xs dark:bg-white/10">
-            {JSON.stringify(lead, null, 2)}
-          </pre>
-        </details>
-      </section>
-    </main>
-  );
+export async function generateMetadata({ params }: { params: Promise<Params> }) {
+  const { id } = await params;
+  return { title: `Lead ${id} • Admin` };
 }
 
-function Row({ k, v }: { k: string; v: string }) {
+export default async function Page({ params }: { params: Promise<Params> }) {
+  const { id } = await params;
+
+  const lead = (await prisma.quoteRequest.findUnique({
+    where: { id },
+    include: {
+      items: true,
+      files: true,
+    },
+  })) as LeadWithRelations | null;
+
+  if (!lead) notFound();
+
   return (
-    <>
-      <dt className="text-muted">{k}</dt>
-      <dd>{v}</dd>
-    </>
+    <main className="p-6 space-y-6">
+      <header className="space-y-1">
+        <h1 className="text-2xl font-semibold">Lead #{lead.id.slice(0, 8)}</h1>
+        <p className="text-sm text-gray-500">
+          Créé le {new Date(lead.createdAt).toLocaleString()}
+        </p>
+      </header>
+
+      <section className="grid gap-6 md:grid-cols-2">
+        <div className="rounded-lg border p-4 space-y-2">
+          <h2 className="font-medium">Client</h2>
+          <div className="text-sm">
+            <div>
+              <span className="text-gray-500">Nom&nbsp;:</span> {lead.firstName} {lead.lastName}
+            </div>
+            <div>
+              <span className="text-gray-500">Email&nbsp;:</span> {lead.email}
+            </div>
+            {lead.phone && (
+              <div>
+                <span className="text-gray-500">Téléphone&nbsp;:</span> {lead.phone}
+              </div>
+            )}
+            {lead.contactPref && (
+              <div>
+                <span className="text-gray-500">Contact&nbsp;:</span> {lead.contactPref}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="rounded-lg border p-4 space-y-2">
+          <h2 className="font-medium">Projet</h2>
+          <div className="text-sm space-y-1">
+            <div>
+              <span className="text-gray-500">Adresse&nbsp;:</span>{" "}
+              {[lead.street, lead.postalCode, lead.city, lead.country].filter(Boolean).join(", ") || "—"}
+            </div>
+            {lead.budget && (
+              <div>
+                <span className="text-gray-500">Budget&nbsp;:</span> {lead.budget}
+              </div>
+            )}
+            {lead.timing && (
+              <div>
+                <span className="text-gray-500">Timing&nbsp;:</span> {lead.timing}
+              </div>
+            )}
+            {lead.notes && (
+              <div className="whitespace-pre-wrap">
+                <span className="text-gray-500">Notes&nbsp;:</span> {lead.notes}
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-lg border p-4">
+        <h2 className="font-medium mb-3">Articles ({lead.items.length})</h2>
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-sm">
+            <thead>
+              <tr className="border-b text-left">
+                <th className="py-2 pr-3">Type</th>
+                <th className="py-2 pr-3">Qté</th>
+                <th className="py-2 pr-3">Dimensions (cm)</th>
+                <th className="py-2 pr-3">Pose</th>
+                <th className="py-2 pr-3">Commande</th>
+                <th className="py-2 pr-3">Couleur/Tissu</th>
+                <th className="py-2 pr-3">Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              {lead.items.map((it: StoreItem) => (
+                <tr key={it.id} className="border-b">
+                  <td className="py-2 pr-3">{it.type}</td>
+                  <td className="py-2 pr-3">{it.quantity}</td>
+                  <td className="py-2 pr-3">
+                    {it.width} × {it.height}
+                    {it.toleranceCm ? ` (±${it.toleranceCm})` : ""}
+                  </td>
+                  <td className="py-2 pr-3">{it.mount || "—"}</td>
+                  <td className="py-2 pr-3">
+                    {it.control}
+                    {it.controlSide ? ` (${it.controlSide})` : ""}
+                  </td>
+                  <td className="py-2 pr-3">
+                    {it.fabricBrand || it.fabricCollection || it.fabricColorName
+                      ? [it.fabricBrand, it.fabricCollection, it.fabricColorName].filter(Boolean).join(" • ")
+                      : it.colorCustom || it.colorTone || "—"}
+                  </td>
+                  <td className="py-2 pr-3">{it.notes || "—"}</td>
+                </tr>
+              ))}
+              {lead.items.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="py-6 text-center text-gray-500">
+                    Aucun article.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="rounded-lg border p-4">
+        <h2 className="font-medium mb-3">Fichiers ({lead.files.length})</h2>
+        <ul className="list-disc pl-5 text-sm space-y-1">
+          {lead.files.map((f: FileRef) => (
+            <li key={f.id}>
+              <a
+                href={f.url ?? "#"}
+                target="_blank"
+                rel="noreferrer"
+                className="underline"
+              >
+                {f.name}
+              </a>{" "}
+              <span className="text-gray-500">({f.mime}, {Math.round(f.size / 1024)} Ko)</span>
+            </li>
+          ))}
+          {lead.files.length === 0 && <li className="text-gray-500">Aucun fichier.</li>}
+        </ul>
+      </section>
+    </main>
   );
 }

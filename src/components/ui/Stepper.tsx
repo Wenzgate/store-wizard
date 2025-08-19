@@ -1,7 +1,11 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { cn } from "./_utils"; // inline util below if path changes
+// util classe → classe
+function cn(...classes: Array<string | false | null | undefined>) {
+    return classes.filter(Boolean).join(" ");
+  }
+  
 import { useEffect, useMemo } from "react";
 
 type Step = {
@@ -112,6 +116,4 @@ export default function Stepper({
 }
 
 // simple classNames utility (local to avoid extra deps)
-function cn(...a: Array<string | false | null | undefined>) {
-  return a.filter(Boolean).join(" ");
-}
+

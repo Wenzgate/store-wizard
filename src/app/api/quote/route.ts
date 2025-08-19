@@ -1,150 +1,37 @@
+// src/app/api/quote/route.ts
 import { NextResponse } from "next/server";
 import { QuoteRequestSchema } from "@/schemas/quote";
 import type { QuoteRequest } from "@/types/quote";
 import { ipFromRequest, rateLimiter } from "@/lib/ratelimit";
 import { validateAllFiles, storeFilesDev } from "@/lib/upload";
 import { PrismaClient } from "@prisma/client";
-import crypto from "crypto";
 import { renderQuoteEmailHTML } from "@/emails/quote-recap";
 import { generateQuotePdf } from "@/server/pdf";
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
-
-// src/app/api/quote/route.ts
-import { NextResponse } from "next/server";
-import { QuoteRequestSchema } from "@/schemas/quote";
-
-// (Optionnel) Email via Resend
-// pnpm add resend  (ou npm i resend / yarn add resend)
+import os from "node:os";
+import crypto from "node:crypto";
 import { Resend } from "resend";
 
+// ===== Email config =====
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
-const RECEIVER_EMAIL = process.env.QUOTE_RECEIVER_EMAIL || "anderlechtdecor@hotmail.com";
-const SENDER_EMAIL = process.env.QUOTE_SENDER_EMAIL || "contact@mika-cornelis.be";
+const RECEIVER_EMAIL = process.env.QUOTE_RECEIVER_EMAIL || process.env.ADMIN_EMAIL || "anderlechtdecor@hotmail.com";
+const SENDER_EMAIL =
+  process.env.QUOTE_SENDER_EMAIL || process.env.MAIL_FROM || "no-reply@anderlechtdecor.local";
 
-export async function POST(req: Request) {
-  try {
-    const body = await req.json();
-
-    // Honeypot anti-spam
-    if (body?.honeypot) {
-      return NextResponse.json({ ok: true, skipped: true }, { status: 200 });
-    }
-
-    // Validation stricte Zod (utilise ton schéma partagé)
-    const parsed = QuoteRequestSchema.safeParse(body);
-    if (!parsed.success) {
-      return NextResponse.json(
-        { ok: false, error: "Validation error", details: parsed.error.format() },
-        { status: 400 }
-      );
-    }
-
-    const quote = parsed.data;
-
-    // Log serveur pour debug
-    console.log("[API] Quote reçu:", {
-      customer: quote.customer,
-      items: quote.items?.length ?? 0,
-      project: quote.project,
-    });
-
-    // Envoi email si Resend configuré
-    if (resend) {
-      const subject = `Nouvelle demande de devis (${quote.customer.firstName} ${quote.customer.lastName})`;
-      const text = renderTextEmail(quote);
-      // HTML minimal safe; tu peux faire mieux si tu veux
-      const html = `<pre style="font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; white-space:pre-wrap">${escapeHtml(
-        text
-      )}</pre>`;
-
-      await resend.emails.send({
-        from: SENDER_EMAIL,
-        to: RECEIVER_EMAIL,
-        subject,
-        text,
-        html,
-      });
-    }
-
-    return NextResponse.json({ ok: true }, { status: 200 });
-  } catch (e) {
-    console.error("[API] /api/quote error:", e);
-    return NextResponse.json({ ok: false, error: "Server error" }, { status: 500 });
-  }
-}
-
-// --- helpers ---
-function renderTextEmail(q: any) {
-  const addr = [
-    q.project?.address?.street,
-    q.project?.address?.postalCode,
-    q.project?.address?.city,
-    q.project?.address?.country,
-  ]
-    .filter(Boolean)
-    .join(", ");
-
-  const items =
-    (q.items ?? [])
-      .map((it: any, i: number) => {
-        const dims = it?.dims ? `${it.dims.width} x ${it.dims.height} cm` : "-";
-        return [
-          `#${i + 1}`,
-          `Type: ${it.type}`,
-          `Qté: ${it.quantity}`,
-          `Pose: ${it.mount}`,
-          `Commande: ${it.control}`,
-          `Dimensions: ${dims}`,
-          it.notes ? `Notes: ${it.notes}` : undefined,
-        ]
-          .filter(Boolean)
-          .join(" | ");
-      })
-      .join("\n") || "(aucun item)";
-
-  return [
-    `Nouvelle demande de devis — Anderlecht Décor`,
-    ``,
-    `Client: ${q.customer?.firstName || "-"} ${q.customer?.lastName || "-"} (${q.customer?.email || "-"})`,
-    `Téléphone: ${q.customer?.phone || "-"}`,
-    ``,
-    `Adresse: ${addr || "-"}`,
-    `Timing: ${q.project?.timing || "-"}`,
-    `Budget: ${q.project?.budget || "-"}`,
-    ``,
-    `Items (${q.items?.length || 0}):`,
-    items,
-    ``,
-    `Notes projet: ${q.project?.notes || "-"}`,
-    ``,
-    `Consent RGPD: ${q.consentRgpd ? "oui" : "non"} | Estimation indicative: ${q.acceptEstimateOnly ? "oui" : "non"}`,
-    ``,
-    `Payload JSON:`,
-    JSON.stringify(q, null, 2),
-  ].join("\n");
-}
-
-function escapeHtml(s: string) {
-  return s.replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]!));
-}
-
-
-localStorage.setItem("last_quote", JSON.stringify(parsed.data));
-
-
-
-
-const prisma = globalThis.__prisma ?? new PrismaClient();
+// Prisma (singleton in dev)
+const prisma = (globalThis as any).__prisma ?? new PrismaClient();
 if (!(globalThis as any).__prisma) (globalThis as any).__prisma = prisma;
 
 export const runtime = "nodejs";
 
-/** POST /api/quote — create a quote request, send email, save PDF (dev) */
+/**
+ * POST /api/quote — crée une demande, stocke DB, fichiers, PDF et envoie un e‑mail
+ */
 export async function POST(req: Request) {
   const ip = ipFromRequest(req);
 
-  // Rate limit (1 token / req)
+  // --- Rate limit basique (1 token / req)
   try {
     const r = await rateLimiter.consume(ip, 1);
     if (!r.allowed) {
@@ -158,10 +45,10 @@ export async function POST(req: Request) {
       );
     }
   } catch {
-    // ignore limiter errors
+    // on ignore les erreurs de limiter pour ne pas bloquer la route
   }
 
-  // Read JSON body
+  // --- Lecture JSON
   let body: unknown;
   try {
     body = await req.json();
@@ -169,21 +56,22 @@ export async function POST(req: Request) {
     return json({ error: "Requête invalide: JSON attendu." }, 400);
   }
 
-  // Parse with Zod
+  // --- Validation Zod
   const parsed = QuoteRequestSchema.safeParse(body);
   if (!parsed.success) {
     return json({ error: "Validation échouée.", details: parsed.error.flatten() }, 422);
   }
   const data = parsed.data as QuoteRequest;
 
-  // Honeypot
+  // --- Honeypot anti‑spam
   if ((data.honeypot ?? "") !== "") {
     return json({ id: "ok" }, 200);
   }
 
-  // Validate file metadata
+  // --- Validation & collecte des fichiers (métadonnées)
+  let filesMeta: ReturnType<typeof validateAllFiles>;
   try {
-    validateAllFiles(data);
+    filesMeta = validateAllFiles(data);
   } catch (e: any) {
     return json({ error: e?.message ?? "Erreur fichiers." }, 400);
   }
@@ -193,7 +81,7 @@ export async function POST(req: Request) {
     const referrer = req.headers.get("referer") ?? req.headers.get("referrer") ?? "";
     const ipHash = await sha256(`${ip}|${userAgent}`);
 
-    // Persist QuoteRequest
+    // --- Persist QuoteRequest
     const qr = await prisma.quoteRequest.create({
       data: {
         firstName: data.customer.firstName,
@@ -219,7 +107,7 @@ export async function POST(req: Request) {
       },
     });
 
-    // Persist items
+    // --- Persist items
     const createdItems = await Promise.all(
       (data.items ?? []).map((it) =>
         prisma.storeItem.create({
@@ -253,8 +141,8 @@ export async function POST(req: Request) {
       )
     );
 
-    // Files (dev stub storage)
-    const { globals, perItem } = validateAllFiles(data);
+    // --- Stockage de fichiers (stub dev)
+    const { globals, perItem } = filesMeta;
     await storeFilesDev([...globals, ...Object.values(perItem).flat()]);
 
     const globalFilesCreate = globals.map((f) =>
@@ -271,7 +159,7 @@ export async function POST(req: Request) {
     );
 
     const perItemFilesCreate = createdItems.flatMap((created, idx) => {
-      const key = data.items[idx]?.id ?? "";
+      const key = data.items?.[idx]?.id ?? "";
       const files = perItem[key] ?? [];
       return files.map((f) =>
         prisma.fileRef.create({
@@ -289,47 +177,34 @@ export async function POST(req: Request) {
 
     await Promise.all([...globalFilesCreate, ...perItemFilesCreate]);
 
-    // Prepare email + PDF
-    const adminBase = process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || "";
-    const adminUrl = adminBase ? `${adminBase.replace(/\/+$/, "")}/admin/leads/${qr.id}` : "";
-    const emailHtml = renderQuoteEmailHTML(
-      { ...data, id: qr.id },
-      { adminUrl, publicBaseUrl: adminBase || "" }
-    );
+    // --- Email + PDF
+    const publicBase = process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || "";
+    const base = publicBase ? publicBase.replace(/\/+$/, "") : "";
+    const adminUrl = base ? `${base}/admin/leads/${qr.id}` : "";
+    const emailHtml = renderQuoteEmailHTML({ ...data, id: qr.id }, { adminUrl, publicBaseUrl: base });
 
-    // Generate PDF and save to /tmp (dev)
+    // Génère le PDF dans un répertoire tmp portable
     try {
       const pdf = await generateQuotePdf({ ...data, id: qr.id });
-      const p = join("/tmp", `quote-${qr.id}.pdf`);
-      await writeFile(p, pdf);
-      // (Optionnel) on pourrait attacher ce chemin dans la DB si besoin
+      const tmpFile = join(os.tmpdir(), `quote-${qr.id}.pdf`);
+      await writeFile(tmpFile, pdf);
+      // tu peux persister le chemin si besoin
     } catch (e) {
       console.warn("[api/quote] PDF non généré:", (e as any)?.message);
     }
 
-    // Send email (stub if missing config)
+    // Envoi e‑mail (Resend si configuré, sinon fallback console)
     try {
-      const adminEmail = process.env.ADMIN_EMAIL;
-      const from = process.env.MAIL_FROM || "no-reply@ anderlechtdecor.local";
-      const resendKey = process.env.RESEND_API_KEY;
-
-      if (adminEmail && resendKey) {
-        await fetch("https://api.resend.com/emails", {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${resendKey}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            from,
-            to: [adminEmail],
-            subject: `Nouvelle demande d’estimation #${qr.id.slice(0, 8)}`,
-            html: emailHtml,
-          }),
+      if (resend) {
+        await resend.emails.send({
+          from: SENDER_EMAIL,
+          to: [RECEIVER_EMAIL],
+          subject: `Nouvelle demande d’estimation #${qr.id.slice(0, 8)}`,
+          html: emailHtml,
         });
       } else {
-        console.log("[email:stub] To:", adminEmail ?? "(unset)");
-        console.log(emailHtml.slice(0, 500) + "...");
+        console.log("[email:stub] To:", RECEIVER_EMAIL);
+        console.log(emailHtml.slice(0, 600) + "...");
       }
     } catch (e) {
       console.warn("[api/quote] Envoi email échoué:", (e as any)?.message);
@@ -369,6 +244,6 @@ function mimeToEnum(m: string): any {
     case "application/pdf":
       return "application_pdf";
     default:
-      return "application_pdf";
+      return "application_octetstream";
   }
 }

@@ -25,9 +25,26 @@ import { motion, AnimatePresence } from "framer-motion";
 
 type FormShape = QuoteRequest; // le parent doit fournir FormProvider<QuoteRequest>
 
-const enumToOptions = (e: z.ZodEnum<[string, ...string[]]>) =>
-  (e.options as readonly string[]).map((v) => ({ value: v, label: v }));
+/** --- Helpers enums : compatible Zod v4 "classic" --- */
+type ZodEnumLike = z.ZodTypeAny;
 
+const getEnumValues = (schema: ZodEnumLike): string[] => {
+  const anySchema = schema as any;
+  // z.enum([...]) → .options (array)
+  if (Array.isArray(anySchema?.options)) return [...anySchema.options];
+  // z.nativeEnum(...) → .enum (object)
+  if (anySchema?.enum && typeof anySchema.enum === "object") {
+    return Object.values(anySchema.enum).filter(
+      (v): v is string => typeof v === "string"
+    );
+  }
+  throw new Error("Unsupported enum schema passed to getEnumValues");
+};
+
+const enumToOptions = (schema: ZodEnumLike) =>
+  getEnumValues(schema).map((v) => ({ value: v, label: v }));
+
+/** --- Libellés UI --- */
 const labels = {
   type: {
     VENETIAN: "Vénitien",
@@ -81,6 +98,34 @@ const labels = {
   },
 };
 
+/** --- Types de chemins RHF pour items --- */
+type ItemKey =
+  | "type"
+  | "quantity"
+  | "mount"
+  | "windowType"
+  | "room"
+  | "roomLabel"
+  | "control"
+  | "controlSide"
+  | "motor.power"
+  | "motor.brand"
+  | "dims.width"
+  | "dims.height"
+  | "dims.toleranceCm"
+  | "fabric.brand"
+  | "fabric.collection"
+  | "fabric.colorName"
+  | "fabric.colorCode"
+  | "fabric.opacity"
+  | "fabric.opennessFactorPct"
+  | "color.tone"
+  | "color.custom"
+  | "notes"
+  | "files";
+
+type ItemPath<K extends ItemKey> = `items.${number}.${K}`;
+
 export interface StoreItemRepeaterProps {
   name?: "items"; // par défaut "items"
   maxItems?: number;
@@ -91,8 +136,13 @@ export interface StoreItemRepeaterProps {
  * Repeater pour les lignes "StoreItem".
  * Utilise le FormProvider parent (QuoteRequest).
  */
-export default function StoreItemRepeater({ name = "items", maxItems = 20, className }: StoreItemRepeaterProps) {
-  const { control, register, formState, watch, setValue } = useFormContext<FormShape>();
+export default function StoreItemRepeater({
+  name = "items",
+  maxItems = 20,
+  className,
+}: StoreItemRepeaterProps) {
+  const { control, register, formState, watch, setValue } =
+    useFormContext<FormShape>();
   const { fields, append, remove } = useFieldArray({ control, name });
 
   const items = watch(name) as StoreItem[] | undefined;
@@ -130,10 +180,10 @@ export default function StoreItemRepeater({ name = "items", maxItems = 20, class
 
       <AnimatePresence initial={false}>
         {fields.map((field, index) => {
-          const base = `${name}.${index}`;
-          const itemErr = (formState.errors as any)?.[name]?.[index];
+          const itemErr = (formState.errors as any)?.items?.[index];
 
-          const controlVal = (items?.[index]?.control ?? "CHAIN") as typeof ControlEnum._def.values[number];
+          type ControlValue = z.infer<typeof ControlEnum>;
+          const controlVal = (items?.[index]?.control ?? "CHAIN") as ControlValue;
           const requiresSide = controlVal === "CHAIN" || controlVal === "CRANK";
           const isMotor = controlVal === "MOTOR";
 
@@ -144,7 +194,7 @@ export default function StoreItemRepeater({ name = "items", maxItems = 20, class
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -4 }}
               className="rounded-2xl border border-border p-4"
-              aria-describedby={itemErr ? `${base}-error` : undefined}
+              aria-describedby={itemErr ? `items.${index}-error` : undefined}
             >
               <legend className="mb-3 flex items-center justify-between">
                 <span className="text-sm font-medium">Store #{index + 1}</span>
@@ -161,13 +211,17 @@ export default function StoreItemRepeater({ name = "items", maxItems = 20, class
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 {/* Type & Quantité */}
                 <div>
-                  <label className="mb-1 block text-sm font-medium">Type de store</label>
+                  <label className="mb-1 block text-sm font-medium">
+                    Type de store
+                  </label>
                   <select
-                    {...register(`${base}.type` as const)}
+                    {...register(
+                      `items.${index}.type` as ItemPath<"type">
+                    )}
                     className="w-full rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
                     aria-invalid={!!itemErr?.type}
                   >
-                    {(StoreTypeEnum.options as readonly string[]).map((v) => (
+                    {getEnumValues(StoreTypeEnum).map((v) => (
                       <option key={v} value={v}>
                         {labels.type[v as keyof typeof labels.type] ?? v}
                       </option>
@@ -177,16 +231,23 @@ export default function StoreItemRepeater({ name = "items", maxItems = 20, class
                 </div>
 
                 <div>
-                  <label className="mb-1 block text-sm font-medium">Quantité</label>
+                  <label className="mb-1 block text-sm font-medium">
+                    Quantité
+                  </label>
                   <input
                     type="number"
                     min={1}
                     step={1}
-                    {...register(`${base}.quantity` as const, { valueAsNumber: true })}
+                    {...register(
+                      `items.${index}.quantity` as ItemPath<"quantity">,
+                      { valueAsNumber: true }
+                    )}
                     className="w-full rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
                     aria-invalid={!!itemErr?.quantity}
                   />
-                  {itemErr?.quantity && <FieldError msg={itemErr.quantity.message} />}
+                  {itemErr?.quantity && (
+                    <FieldError msg={itemErr.quantity.message} />
+                  )}
                 </div>
 
                 {/* Pose & Ouverture */}
@@ -196,10 +257,12 @@ export default function StoreItemRepeater({ name = "items", maxItems = 20, class
                     <HelpTooltip content="Pose tableau = dans l'embrasure. Recouvrement = sur le mur autour de la fenêtre." />
                   </label>
                   <select
-                    {...register(`${base}.mount` as const)}
+                    {...register(
+                      `items.${index}.mount` as ItemPath<"mount">
+                    )}
                     className="w-full rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
                   >
-                    {(MountTypeEnum.options as readonly string[]).map((v) => (
+                    {getEnumValues(MountTypeEnum).map((v) => (
                       <option key={v} value={v}>
                         {labels.mount[v as keyof typeof labels.mount] ?? v}
                       </option>
@@ -208,13 +271,17 @@ export default function StoreItemRepeater({ name = "items", maxItems = 20, class
                 </div>
 
                 <div>
-                  <label className="mb-1 block text-sm font-medium">Type d’ouverture</label>
+                  <label className="mb-1 block text-sm font-medium">
+                    Type d’ouverture
+                  </label>
                   <select
-                    {...register(`${base}.windowType` as const)}
+                    {...register(
+                      `items.${index}.windowType` as ItemPath<"windowType">
+                    )}
                     className="w-full rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
                   >
                     <option value="">—</option>
-                    {(WindowTypeEnum.options as readonly string[]).map((v) => (
+                    {getEnumValues(WindowTypeEnum).map((v) => (
                       <option key={v} value={v}>
                         {labels.window[v as keyof typeof labels.window] ?? v}
                       </option>
@@ -224,13 +291,17 @@ export default function StoreItemRepeater({ name = "items", maxItems = 20, class
 
                 {/* Pièce */}
                 <div>
-                  <label className="mb-1 block text-sm font-medium">Pièce</label>
+                  <label className="mb-1 block text-sm font-medium">
+                    Pièce
+                  </label>
                   <select
-                    {...register(`${base}.room` as const)}
+                    {...register(
+                      `items.${index}.room` as ItemPath<"room">
+                    )}
                     className="w-full rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
                   >
                     <option value="">—</option>
-                    {(RoomTypeEnum.options as readonly string[]).map((v) => (
+                    {getEnumValues(RoomTypeEnum).map((v) => (
                       <option key={v} value={v}>
                         {labels.room[v as keyof typeof labels.room] ?? v}
                       </option>
@@ -238,10 +309,14 @@ export default function StoreItemRepeater({ name = "items", maxItems = 20, class
                   </select>
                 </div>
                 <div>
-                  <label className="mb-1 block text-sm font-medium">Précision pièce (optionnel)</label>
+                  <label className="mb-1 block text-sm font-medium">
+                    Précision pièce (optionnel)
+                  </label>
                   <input
                     type="text"
-                    {...register(`${base}.roomLabel` as const)}
+                    {...register(
+                      `items.${index}.roomLabel` as ItemPath<"roomLabel">
+                    )}
                     className="w-full rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
                     placeholder="Ex: baie vitrée salon"
                   />
@@ -249,12 +324,16 @@ export default function StoreItemRepeater({ name = "items", maxItems = 20, class
 
                 {/* Commande */}
                 <div>
-                  <label className="mb-1 block text-sm font-medium">Commande</label>
+                  <label className="mb-1 block text-sm font-medium">
+                    Commande
+                  </label>
                   <select
-                    {...register(`${base}.control` as const)}
+                    {...register(
+                      `items.${index}.control` as ItemPath<"control">
+                    )}
                     className="w-full rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
                   >
-                    {(ControlEnum.options as readonly string[]).map((v) => (
+                    {getEnumValues(ControlEnum).map((v) => (
                       <option key={v} value={v}>
                         {labels.control[v as keyof typeof labels.control] ?? v}
                       </option>
@@ -264,44 +343,62 @@ export default function StoreItemRepeater({ name = "items", maxItems = 20, class
 
                 {requiresSide && (
                   <div>
-                    <label className="mb-1 block text-sm font-medium">Côté de manoeuvre</label>
+                    <label className="mb-1 block text-sm font-medium">
+                      Côté de manoeuvre
+                    </label>
                     <select
-                      {...register(`${base}.controlSide` as const)}
+                      {...register(
+                        `items.${index}.controlSide` as ItemPath<"controlSide">
+                      )}
                       className="w-full rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
                     >
-                      {(ControlSideEnum.options as readonly string[]).map((v) => (
+                      {getEnumValues(ControlSideEnum).map((v) => (
                         <option key={v} value={v}>
                           {labels.side[v as keyof typeof labels.side] ?? v}
                         </option>
                       ))}
                     </select>
-                    {itemErr?.controlSide && <FieldError msg={itemErr.controlSide.message} />}
+                    {itemErr?.controlSide && (
+                      <FieldError msg={itemErr.controlSide.message} />
+                    )}
                   </div>
                 )}
 
                 {isMotor && (
                   <>
                     <div>
-                      <label className="mb-1 block text-sm font-medium">Alimentation moteur</label>
+                      <label className="mb-1 block text-sm font-medium">
+                        Alimentation moteur
+                      </label>
                       <select
-                        {...register(`${base}.motor.power` as const)}
+                        {...register(
+                          `items.${index}.motor.power` as ItemPath<"motor.power">
+                        )}
                         className="w-full rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
                         aria-invalid={!!itemErr?.motor?.power}
                       >
                         <option value="">—</option>
-                        {(MotorPowerEnum.options as readonly string[]).map((v) => (
+                        {getEnumValues(MotorPowerEnum).map((v) => (
                           <option key={v} value={v}>
-                            {labels.motorPower[v as keyof typeof labels.motorPower] ?? v}
+                            {labels.motorPower[
+                              v as keyof typeof labels.motorPower
+                            ] ?? v}
                           </option>
                         ))}
                       </select>
-                      {itemErr?.motor?.power && <FieldError msg={itemErr.motor.power.message} />}
+                      {itemErr?.motor?.power && (
+                        <FieldError msg={itemErr.motor.power.message} />
+                      )}
                     </div>
                     <div>
-                      <label className="mb-1 block text-sm font-medium">Marque moteur (optionnel)</label>
+                      <label className="mb-1 block text-sm font-medium">
+                        Marque moteur (optionnel)
+                      </label>
                       <input
                         type="text"
-                        {...register(`${base}.motor.brand` as const)}
+                        {...register(
+                          `items.${index}.motor.brand` as ItemPath<"motor.brand">
+                        )}
                         className="w-full rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
                         placeholder="Ex: Somfy"
                       />
@@ -320,11 +417,16 @@ export default function StoreItemRepeater({ name = "items", maxItems = 20, class
                     min={MIN_DIM_CM}
                     max={MAX_DIM_CM}
                     step={0.1}
-                    {...register(`${base}.dims.width` as const, { valueAsNumber: true })}
+                    {...register(
+                      `items.${index}.dims.width` as ItemPath<"dims.width">,
+                      { valueAsNumber: true }
+                    )}
                     className="w-full rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
                     aria-invalid={!!itemErr?.dims?.width}
                   />
-                  {itemErr?.dims?.width && <FieldError msg={itemErr.dims.width.message} />}
+                  {itemErr?.dims?.width && (
+                    <FieldError msg={itemErr.dims.width.message} />
+                  )}
                 </div>
 
                 <div>
@@ -337,11 +439,16 @@ export default function StoreItemRepeater({ name = "items", maxItems = 20, class
                     min={MIN_DIM_CM}
                     max={MAX_DIM_CM}
                     step={0.1}
-                    {...register(`${base}.dims.height` as const, { valueAsNumber: true })}
+                    {...register(
+                      `items.${index}.dims.height` as ItemPath<"dims.height">,
+                      { valueAsNumber: true }
+                    )}
                     className="w-full rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
                     aria-invalid={!!itemErr?.dims?.height}
                   />
-                  {itemErr?.dims?.height && <FieldError msg={itemErr.dims.height.message} />}
+                  {itemErr?.dims?.height && (
+                    <FieldError msg={itemErr.dims.height.message} />
+                  )}
                 </div>
 
                 <div>
@@ -354,7 +461,10 @@ export default function StoreItemRepeater({ name = "items", maxItems = 20, class
                     min={MIN_TOLERANCE_CM}
                     max={MAX_TOLERANCE_CM}
                     step={0.5}
-                    {...register(`${base}.dims.toleranceCm` as const, { valueAsNumber: true })}
+                    {...register(
+                      `items.${index}.dims.toleranceCm` as ItemPath<"dims.toleranceCm">,
+                      { valueAsNumber: true }
+                    )}
                     className="w-full rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
                   />
                 </div>
@@ -362,9 +472,13 @@ export default function StoreItemRepeater({ name = "items", maxItems = 20, class
                 {/* Tissu */}
                 <div className="md:col-span-2 grid grid-cols-1 gap-3 md:grid-cols-2">
                   <div>
-                    <label className="mb-1 block text-sm font-medium">Marque tissu</label>
+                    <label className="mb-1 block text-sm font-medium">
+                      Marque tissu
+                    </label>
                     <select
-                      {...register(`${base}.fabric.brand` as const)}
+                      {...register(
+                        `items.${index}.fabric.brand` as ItemPath<"fabric.brand">
+                      )}
                       className="w-full rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
                     >
                       <option value="">—</option>
@@ -374,58 +488,80 @@ export default function StoreItemRepeater({ name = "items", maxItems = 20, class
                   </div>
 
                   <div>
-                    <label className="mb-1 block text-sm font-medium">Collection</label>
+                    <label className="mb-1 block text-sm font-medium">
+                      Collection
+                    </label>
                     <input
                       type="text"
-                      {...register(`${base}.fabric.collection` as const)}
+                      {...register(
+                        `items.${index}.fabric.collection` as ItemPath<"fabric.collection">
+                      )}
                       className="w-full rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
                       placeholder="Ex: Polyscreen 550"
                     />
                   </div>
 
                   <div>
-                    <label className="mb-1 block text-sm font-medium">Couleur</label>
+                    <label className="mb-1 block text-sm font-medium">
+                      Couleur
+                    </label>
                     <input
                       type="text"
-                      {...register(`${base}.fabric.colorName` as const)}
+                      {...register(
+                        `items.${index}.fabric.colorName` as ItemPath<"fabric.colorName">
+                      )}
                       className="w-full rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
                       placeholder="Ex: White / Grey"
                     />
                   </div>
 
                   <div>
-                    <label className="mb-1 block text-sm font-medium">Code couleur</label>
+                    <label className="mb-1 block text-sm font-medium">
+                      Code couleur
+                    </label>
                     <input
                       type="text"
-                      {...register(`${base}.fabric.colorCode` as const)}
+                      {...register(
+                        `items.${index}.fabric.colorCode` as ItemPath<"fabric.colorCode">
+                      )}
                       className="w-full rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
                       placeholder="Ex: 300 / PS550"
                     />
                   </div>
 
                   <div>
-                    <label className="mb-1 block text-sm font-medium">Opacité</label>
+                    <label className="mb-1 block text-sm font-medium">
+                      Opacité
+                    </label>
                     <select
-                      {...register(`${base}.fabric.opacity` as const)}
+                      {...register(
+                        `items.${index}.fabric.opacity` as ItemPath<"fabric.opacity">
+                      )}
                       className="w-full rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
                     >
                       <option value="">—</option>
-                      {(FabricOpacityEnum.options as readonly string[]).map((v) => (
+                      {getEnumValues(FabricOpacityEnum).map((v) => (
                         <option key={v} value={v}>
-                          {labels.opacity[v as keyof typeof labels.opacity] ?? v}
+                          {labels.opacity[v as keyof typeof labels.opacity] ??
+                            v}
                         </option>
                       ))}
                     </select>
                   </div>
 
                   <div>
-                    <label className="mb-1 block text-sm font-medium">Facteur d’ouverture (%)</label>
+                    <label className="mb-1 block text-sm font-medium">
+                      Facteur d’ouverture (%)
+                    </label>
                     <input
                       type="number"
                       min={0}
                       max={100}
                       step={0.5}
-                      {...register(`${base}.fabric.opennessFactorPct` as const, { valueAsNumber: true })}
+                      {...register(
+                        `items.${index}.fabric.opennessFactorPct` as ItemPath<"fabric.opennessFactorPct">,
+                        { valueAsNumber: true }
+                      )}
                       className="w-full rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
                     />
                   </div>
@@ -433,9 +569,13 @@ export default function StoreItemRepeater({ name = "items", maxItems = 20, class
 
                 {/* Couleur générale */}
                 <div>
-                  <label className="mb-1 block text-sm font-medium">Teinte structure</label>
+                  <label className="mb-1 block text-sm font-medium">
+                    Teinte structure
+                  </label>
                   <select
-                    {...register(`${base}.color.tone` as const)}
+                    {...register(
+                      `items.${index}.color.tone` as ItemPath<"color.tone">
+                    )}
                     className="w-full rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
                   >
                     <option value="">—</option>
@@ -448,10 +588,14 @@ export default function StoreItemRepeater({ name = "items", maxItems = 20, class
                   </select>
                 </div>
                 <div>
-                  <label className="mb-1 block text-sm font-medium">Détail couleur (si personnalisé)</label>
+                  <label className="mb-1 block text-sm font-medium">
+                    Détail couleur (si personnalisé)
+                  </label>
                   <input
                     type="text"
-                    {...register(`${base}.color.custom` as const)}
+                    {...register(
+                      `items.${index}.color.custom` as ItemPath<"color.custom">
+                    )}
                     className="w-full rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
                     placeholder="Ex: RAL 7016"
                   />
@@ -459,9 +603,13 @@ export default function StoreItemRepeater({ name = "items", maxItems = 20, class
 
                 {/* Notes */}
                 <div className="md:col-span-2">
-                  <label className="mb-1 block text-sm font-medium">Notes</label>
+                  <label className="mb-1 block text-sm font-medium">
+                    Notes
+                  </label>
                   <textarea
-                    {...register(`${base}.notes` as const)}
+                    {...register(
+                      `items.${index}.notes` as ItemPath<"notes">
+                    )}
                     rows={3}
                     className="w-full rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
                     placeholder="Précisions utiles (ex: contraintes, prises de mesures approximatives...)"
@@ -471,11 +619,15 @@ export default function StoreItemRepeater({ name = "items", maxItems = 20, class
                 {/* Fichiers */}
                 <div className="md:col-span-2">
                   <FileDrop
-                    name={`${base}.files`}
+                    name={`items.${index}.files`}
                     value={(items?.[index]?.files as unknown as File[]) ?? []}
                     onChange={(files) => {
-                      // stocker côté form: File[] temporaire (sera transformé en FileRef côté upload)
-                      setValue(`${base}.files` as any, files as any, { shouldDirty: true, shouldValidate: false });
+                      // On stocke temporairement File[] côté form (transformé en FileRef au moment de l’upload côté serveur)
+                      setValue(
+                        `items.${index}.files` as ItemPath<"files">,
+                        files as any,
+                        { shouldDirty: true, shouldValidate: false }
+                      );
                     }}
                     maxFiles={MAX_FILES_PER_ITEM}
                     maxSize={MAX_FILE_SIZE_BYTES}
@@ -486,7 +638,10 @@ export default function StoreItemRepeater({ name = "items", maxItems = 20, class
               </div>
 
               {itemErr && (
-                <p id={`${base}-error`} className="mt-2 text-xs text-red-600">
+                <p
+                  id={`items.${index}-error`}
+                  className="mt-2 text-xs text-red-600"
+                >
                   Corrigez les erreurs surlignées ci‑dessus.
                 </p>
               )}
@@ -497,7 +652,8 @@ export default function StoreItemRepeater({ name = "items", maxItems = 20, class
 
       {fields.length === 0 && (
         <div className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted">
-          Aucun store ajouté. Utilisez “Ajouter” pour créer votre premier élément.
+          Aucun store ajouté. Utilisez “Ajouter” pour créer votre premier
+          élément.
         </div>
       )}
     </div>
