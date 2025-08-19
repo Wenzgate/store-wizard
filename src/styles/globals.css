@@ -1,0 +1,24 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+@import "tailwindcss";
+:root{
+  --bg: 0 0% 100%;
+  --fg: 222 47% 11%;
+  --muted: 215 16% 47%;
+  --border: 214 32% 91%;
+  --brand: 220 90% 56%;
+  --brand-foreground: 0 0% 100%;
+}
+:root.dark{
+  --bg: 222 47% 11%;
+  --fg: 210 40% 98%;
+  --muted: 215 20% 65%;
+  --border: 217 33% 17%;
+  --brand: 220 90% 56%;
+  --brand-foreground: 0 0% 100%;
+}
+.text-muted{ color: hsl(var(--muted)); }
+.bg-bg{ background-color: hsl(var(--bg)); }
+.text-fg{ color: hsl(var(--fg)); }
+.border-border{ border-color: hsl(var(--border)); }

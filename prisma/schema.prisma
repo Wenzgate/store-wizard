@@ -1,0 +1,245 @@
+// LOT 3 — Prisma schema (SQLite dev)
+// Models: QuoteRequest, StoreItem, FileRef
+// Inclut: relations, index utiles, champs status/consents/analytics.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL") // ex: file:./prisma/dev.db
+}
+
+/* =========================
+   Enums métier & systèmes
+   ========================= */
+
+enum LeadStatus {
+  NEW
+  IN_REVIEW
+  CONTACTED
+  WON
+  LOST
+  ARCHIVED
+}
+
+enum BudgetRange {
+  LOW
+  MID
+  HIGH
+  LUX
+}
+
+enum Timing {
+  ASAP
+  W2_4
+  FLEX
+  JUST_INFO
+}
+
+enum StoreType {
+  VENETIAN
+  ROMAN
+  ROLLER
+  PLEATED
+  CASSETTE
+}
+
+enum MountType {
+  INSIDE
+  OUTSIDE
+  CEILING
+}
+
+enum WindowType {
+  WINDOW_SINGLE
+  WINDOW_DOOR
+  BAY
+  CORNER
+  SKYLIGHT
+  OTHER
+}
+
+enum RoomType {
+  LIVING
+  KITCHEN
+  BEDROOM
+  BATHROOM
+  OFFICE
+  OTHER
+}
+
+enum Control {
+  CHAIN
+  MOTOR
+  CRANK
+  SPRING
+}
+
+enum ControlSide {
+  LEFT
+  RIGHT
+}
+
+enum MotorPower {
+  WIRED
+  BATTERY
+  SOLAR
+}
+
+enum FabricOpacity {
+  SHEER
+  TRANSLUCENT
+  DIMOUT
+  BLACKOUT
+  SCREEN
+}
+
+enum ContactPreference {
+  EMAIL
+  PHONE
+  WHATSAPP
+}
+
+enum Source {
+  WIDGET
+  WEBSITE
+  OTHER
+}
+
+enum MimeType {
+  image_jpeg
+  image_png
+  image_webp
+  application_pdf
+}
+
+/* =========================
+   Modèles
+   ========================= */
+
+model QuoteRequest {
+  id                 String           @id @default(cuid())
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  // Contact
+  firstName          String
+  lastName           String
+  email              String
+  phone              String?
+  contactPref        ContactPreference?
+
+  // Projet
+  budget             BudgetRange?
+  timing             Timing?
+  street             String?
+  postalCode         String?
+  city               String?
+  country            String?
+  notes              String?
+
+  // Consentements / conformité
+  consentRgpd        Boolean
+  acceptEstimateOnly Boolean?         // "estimation indicative" acceptée
+  honeypot           String?          // doit rester vide côté app
+
+  // Métadonnées
+  status             LeadStatus       @default(NEW)
+  source             Source?          @default(WEBSITE)
+  locale             String?          // "fr", "en", "nl"
+
+  // Analytics / attribution
+  utmSource          String?
+  utmMedium          String?
+  utmCampaign        String?
+  utmTerm            String?
+  utmContent         String?
+  referrer           String?
+  userAgent          String?
+  ipHash             String?          // hashé côté serveur
+
+  // Relations
+  items              StoreItem[]
+  files              FileRef[]        // fichiers globaux rattachés à la demande
+
+  @@index([createdAt])
+  @@index([email])
+  @@index([status, createdAt])
+  @@index([utmSource, utmCampaign])
+}
+
+model StoreItem {
+  id                 String        @id @default(cuid())
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  quoteRequestId     String
+  quoteRequest       QuoteRequest  @relation(fields: [quoteRequestId], references: [id], onDelete: Cascade)
+
+  // Spécifications
+  type               StoreType
+  quantity           Int           @default(1)
+  room               RoomType?
+  roomLabel          String?
+  windowType         WindowType?
+  mount              MountType
+
+  // Commande
+  control            Control
+  controlSide        ControlSide?   // requis si CHAIN/CRANK (validé côté Zod)
+
+  // Motorisation
+  motorBrand         String?
+  motorPower         MotorPower?
+  motorNotes         String?
+
+  // Tissu
+  fabricBrand        String?        // BANDALUX / OTHER
+  fabricCollection   String?
+  fabricColorName    String?
+  fabricColorCode    String?
+  fabricOpennessPct  Float?         // 0..100
+  fabricOpacity      FabricOpacity?
+
+  // Couleur
+  colorTone          String?        // WHITE / NEUTRAL / WARM / COOL / DARK / CUSTOM (stocké string pour souplesse)
+  colorCustom        String?
+
+  // Dimensions (cm)
+  width              Float
+  height             Float
+  toleranceCm        Float?         // 0..5
+
+  notes              String?
+
+  // Relations
+  files              FileRef[]      // fichiers attachés à l'item
+
+  @@index([quoteRequestId])
+  @@index([type])
+  @@index([control])
+}
+
+model FileRef {
+  id             String     @id @default(cuid())
+  createdAt      DateTime   @default(now())
+
+  // Ciblage relationnel : fichier global ou de ligne
+  quoteRequestId String?
+  storeItemId    String?
+
+  quoteRequest   QuoteRequest? @relation(fields: [quoteRequestId], references: [id], onDelete: Cascade)
+  storeItem      StoreItem?    @relation(fields: [storeItemId], references: [id], onDelete: Cascade)
+
+  name           String
+  mime           MimeType
+  size           Int           // bytes
+  url            String?       // emplacement (ex: S3 / local)
+  sha256         String?       // dédup potentielle
+
+  @@index([quoteRequestId])
+  @@index([storeItemId])
+  @@index([mime])
+}

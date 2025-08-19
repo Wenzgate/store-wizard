@@ -1,0 +1,102 @@
+{
+    "$schema": "https://example.com/anderlecht-decor/bandalux.schema.json",
+    "name": "Bandalux Taxonomy",
+    "version": "1.0.0",
+    "updatedAt": "2025-08-19",
+    "locale": "fr-BE",
+    "notes": "Taxonomie produit Bandalux sans tarifs. Les IDs sont stables et en kebab-case. Ne pas renommer les IDs une fois utilisés.",
+    "entities": {
+      "storeTypes": [
+        { "id": "roller", "label": "Enrouleur", "synonyms": ["store enrouleur", "rollo"], "mapsTo": { "type": "ROLLER" } },
+        { "id": "venetian", "label": "Vénitien", "synonyms": ["stores vénitiens"], "mapsTo": { "type": "VENETIAN" } },
+        { "id": "roman", "label": "Bateau", "synonyms": ["store bateau"], "mapsTo": { "type": "ROMAN" } },
+        { "id": "pleated", "label": "Plissé", "synonyms": ["store plissé"], "mapsTo": { "type": "PLEATED" } },
+        { "id": "cassette", "label": "Coffre / Cassette", "synonyms": ["coffre", "box"], "mapsTo": { "type": "CASSETTE" } }
+      ],
+      "mounts": [
+        { "id": "inside-recess", "label": "Pose tableau (intérieur)", "mapsTo": { "mount": "INSIDE" } },
+        { "id": "wall-face", "label": "Recouvrement mural", "mapsTo": { "mount": "OUTSIDE" } },
+        { "id": "ceiling", "label": "Pose plafond", "mapsTo": { "mount": "CEILING" } }
+      ],
+      "controls": [
+        { "id": "chain", "label": "Chaînette", "mapsTo": { "control": "CHAIN" } },
+        { "id": "motor", "label": "Motorisation", "mapsTo": { "control": "MOTOR" } },
+        { "id": "crank", "label": "Manivelle", "mapsTo": { "control": "CRANK" } },
+        { "id": "spring", "label": "Ressort (auto‑blocant)", "mapsTo": { "control": "SPRING" } }
+      ],
+      "controlSides": [
+        { "id": "left", "label": "Gauche", "mapsTo": { "controlSide": "LEFT" } },
+        { "id": "right", "label": "Droite", "mapsTo": { "controlSide": "RIGHT" } }
+      ],
+      "motorPowers": [
+        { "id": "wired", "label": "Filaire 230V", "mapsTo": { "motorPower": "WIRED" }, "notes": "Prévoir alimentation." },
+        { "id": "battery", "label": "Batterie", "mapsTo": { "motorPower": "BATTERY" } },
+        { "id": "solar", "label": "Panneau solaire", "mapsTo": { "motorPower": "SOLAR" } }
+      ],
+      "opacities": [
+        { "id": "sheer", "label": "Voilage", "mapsTo": { "opacity": "SHEER" } },
+        { "id": "translucent", "label": "Translucide", "mapsTo": { "opacity": "TRANSLUCENT" } },
+        { "id": "dimout", "label": "Occultant léger (Dim-out)", "mapsTo": { "opacity": "DIMOUT" } },
+        { "id": "blackout", "label": "Occultant total (Blackout)", "mapsTo": { "opacity": "BLACKOUT" } },
+        { "id": "screen", "label": "Screen", "mapsTo": { "opacity": "SCREEN" }, "notes": "Facteur d’ouverture requis." }
+      ],
+      "screenOpenness": [
+        { "id": "screen-1", "label": "Screen 1%", "valuePct": 1 },
+        { "id": "screen-3", "label": "Screen 3%", "valuePct": 3 },
+        { "id": "screen-5", "label": "Screen 5%", "valuePct": 5 },
+        { "id": "screen-10", "label": "Screen 10%", "valuePct": 10 }
+      ],
+      "hardwareColors": [
+        { "id": "white", "label": "Blanc", "mapsTo": { "tone": "WHITE" } },
+        { "id": "neutral", "label": "Neutre / Gris", "mapsTo": { "tone": "NEUTRAL" } },
+        { "id": "warm", "label": "Chaud / Beige", "mapsTo": { "tone": "WARM" } },
+        { "id": "cool", "label": "Froid", "mapsTo": { "tone": "COOL" } },
+        { "id": "dark", "label": "Foncé / Noir", "mapsTo": { "tone": "DARK" } },
+        { "id": "custom", "label": "Personnalisé (RAL…)", "mapsTo": { "tone": "CUSTOM" } }
+      ],
+      "windowTypes": [
+        { "id": "window", "label": "Fenêtre", "mapsTo": { "windowType": "WINDOW_SINGLE" } },
+        { "id": "door-window", "label": "Porte-fenêtre", "mapsTo": { "windowType": "WINDOW_DOOR" } },
+        { "id": "bay", "label": "Baie", "mapsTo": { "windowType": "BAY" } },
+        { "id": "corner", "label": "Angle", "mapsTo": { "windowType": "CORNER" } },
+        { "id": "skylight", "label": "Vélux", "mapsTo": { "windowType": "SKYLIGHT" } },
+        { "id": "other-opening", "label": "Autre", "mapsTo": { "windowType": "OTHER" } }
+      ],
+      "rooms": [
+        { "id": "living", "label": "Salon", "mapsTo": { "room": "LIVING"} },
+        { "id": "kitchen", "label": "Cuisine", "mapsTo": { "room": "KITCHEN"} },
+        { "id": "bedroom", "label": "Chambre", "mapsTo": { "room": "BEDROOM"} },
+        { "id": "bathroom", "label": "Salle de bain", "mapsTo": { "room": "BATHROOM"} },
+        { "id": "office", "label": "Bureau", "mapsTo": { "room": "OFFICE"} },
+        { "id": "other-room", "label": "Autre", "mapsTo": { "room": "OTHER"} }
+      ],
+      "fabricBrands": [
+        { "id": "bandalux", "label": "BANDALUX", "default": true },
+        { "id": "other", "label": "Autre marque" }
+      ],
+      "fabricCollections": [
+        { "id": "polyscreen-550", "label": "Polyscreen® 550", "brand": "bandalux", "kind": "screen", "defaultOpennessPct": 5, "bandaluxCode": "PS550" },
+        { "id": "polyscreen-650", "label": "Polyscreen® 650", "brand": "bandalux", "kind": "screen", "defaultOpennessPct": 1, "bandaluxCode": "PS650" },
+        { "id": "blackout-premium", "label": "Blackout Premium", "brand": "bandalux", "kind": "blackout", "bandaluxCode": "BO-PREM" },
+        { "id": "dimout-soft", "label": "Dimout Soft", "brand": "bandalux", "kind": "dimout", "bandaluxCode": "DO-SOFT" }
+      ],
+      "cassetteOptions": [
+        { "id": "cassette-small", "label": "Cassette compact", "appliesTo": ["roller", "cassette"] },
+        { "id": "cassette-medium", "label": "Cassette medium", "appliesTo": ["roller", "cassette"] },
+        { "id": "side-channels", "label": "Coulisses latérales (occultation)", "appliesTo": ["cassette"], "notes": "Recommandé avec Blackout." }
+      ],
+      "childSafety": [
+        { "id": "chain-safety", "label": "Sécurité enfant chaînette", "appliesTo": ["chain"] },
+        { "id": "breakaway-connector", "label": "Connecteur anti-étranglement", "appliesTo": ["chain"] }
+      ],
+      "sizeConstraints": {
+        "minWidthCm": 20,
+        "maxWidthCm": 500,
+        "minHeightCm": 20,
+        "maxHeightCm": 500,
+        "toleranceMinCm": 0,
+        "toleranceMaxCm": 5
+      }
+    }
+  }
+  
