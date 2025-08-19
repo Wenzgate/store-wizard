@@ -7,9 +7,6 @@ import type {
   FileRef,
 } from "@prisma/client";
 
-
-
-
 // Force dynamic pour éviter le cache lors de la consult des leads
 export const dynamic = "force-dynamic";
 
@@ -21,13 +18,13 @@ type LeadWithRelations = QuoteRequestModel & {
   files: FileRef[];
 };
 
-export async function generateMetadata({ params }: { params: Params }) {
-  const { id } = params;
+export async function generateMetadata({ params }: { params: Promise<Params> }) {
+  const { id } = await params;
   return { title: `Lead ${id} • Admin` };
 }
 
-export default async function Page({ params }: { params: Params }) {
-  const { id } = params;
+export default async function Page({ params }: { params: Promise<Params> }) {
+  const { id } = await params;
 
   const lead = (await prisma.quoteRequest.findUnique({
     where: { id },
