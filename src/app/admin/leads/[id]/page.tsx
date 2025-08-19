@@ -1,22 +1,15 @@
 // src/app/admin/leads/[id]/page.tsx
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import type {
-  QuoteRequest as QuoteRequestModel,
-  StoreItem,
-  FileRef,
-} from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 
-// Force dynamic pour éviter le cache lors de la consult des leads
 export const dynamic = "force-dynamic";
 
 type Params = { id: string };
 
-// Typage fort du résultat avec relations
-type LeadWithRelations = QuoteRequestModel & {
-  items: StoreItem[];
-  files: FileRef[];
-};
+type LeadWithRelations = Prisma.QuoteRequestGetPayload<{
+  include: { items: true; files: true };
+}>;
 
 export async function generateMetadata({ params }: { params: Promise<Params> }) {
   const { id } = await params;
@@ -26,22 +19,22 @@ export async function generateMetadata({ params }: { params: Promise<Params> }) 
 export default async function Page({ params }: { params: Promise<Params> }) {
   const { id } = await params;
 
-  const lead = (await prisma.quoteRequest.findUnique({
+  const lead = await prisma.quoteRequest.findUnique({
     where: { id },
-    include: {
-      items: true,
-      files: true,
-    },
-  })) as LeadWithRelations | null;
+    include: { items: true, files: true },
+  });
 
   if (!lead) notFound();
+
+  // Ici TS sait que notFound() est never ⇒ lead est non-null après
+  const l = lead as LeadWithRelations;
 
   return (
     <main className="p-6 space-y-6">
       <header className="space-y-1">
-        <h1 className="text-2xl font-semibold">Lead #{lead.id.slice(0, 8)}</h1>
+        <h1 className="text-2xl font-semibold">Lead #{l.id.slice(0, 8)}</h1>
         <p className="text-sm text-gray-500">
-          Créé le {new Date(lead.createdAt).toLocaleString()}
+          Créé le {new Date(l.createdAt).toLocaleString()}
         </p>
       </header>
 
@@ -50,19 +43,19 @@ export default async function Page({ params }: { params: Promise<Params> }) {
           <h2 className="font-medium">Client</h2>
           <div className="text-sm">
             <div>
-              <span className="text-gray-500">Nom&nbsp;:</span> {lead.firstName} {lead.lastName}
+              <span className="text-gray-500">Nom&nbsp;:</span> {l.firstName} {l.lastName}
             </div>
             <div>
-              <span className="text-gray-500">Email&nbsp;:</span> {lead.email}
+              <span className="text-gray-500">Email&nbsp;:</span> {l.email}
             </div>
-            {lead.phone && (
+            {l.phone && (
               <div>
-                <span className="text-gray-500">Téléphone&nbsp;:</span> {lead.phone}
+                <span className="text-gray-500">Téléphone&nbsp;:</span> {l.phone}
               </div>
             )}
-            {lead.contactPref && (
+            {l.contactPref && (
               <div>
-                <span className="text-gray-500">Contact&nbsp;:</span> {lead.contactPref}
+                <span className="text-gray-500">Contact&nbsp;:</span> {l.contactPref}
               </div>
             )}
           </div>
@@ -73,21 +66,21 @@ export default async function Page({ params }: { params: Promise<Params> }) {
           <div className="text-sm space-y-1">
             <div>
               <span className="text-gray-500">Adresse&nbsp;:</span>{" "}
-              {[lead.street, lead.postalCode, lead.city, lead.country].filter(Boolean).join(", ") || "—"}
+              {[l.street, l.postalCode, l.city, l.country].filter(Boolean).join(", ") || "—"}
             </div>
-            {lead.budget && (
+            {l.budget && (
               <div>
-                <span className="text-gray-500">Budget&nbsp;:</span> {lead.budget}
+                <span className="text-gray-500">Budget&nbsp;:</span> {l.budget}
               </div>
             )}
-            {lead.timing && (
+            {l.timing && (
               <div>
-                <span className="text-gray-500">Timing&nbsp;:</span> {lead.timing}
+                <span className="text-gray-500">Timing&nbsp;:</span> {l.timing}
               </div>
             )}
-            {lead.notes && (
+            {l.notes && (
               <div className="whitespace-pre-wrap">
-                <span className="text-gray-500">Notes&nbsp;:</span> {lead.notes}
+                <span className="text-gray-500">Notes&nbsp;:</span> {l.notes}
               </div>
             )}
           </div>
@@ -95,7 +88,7 @@ export default async function Page({ params }: { params: Promise<Params> }) {
       </section>
 
       <section className="rounded-lg border p-4">
-        <h2 className="font-medium mb-3">Articles ({lead.items.length})</h2>
+        <h2 className="font-medium mb-3">Articles ({l.items.length})</h2>
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-sm">
             <thead>
@@ -110,7 +103,7 @@ export default async function Page({ params }: { params: Promise<Params> }) {
               </tr>
             </thead>
             <tbody>
-              {lead.items.map((it: StoreItem) => (
+              {l.items.map((it) => (
                 <tr key={it.id} className="border-b">
                   <td className="py-2 pr-3">{it.type}</td>
                   <td className="py-2 pr-3">{it.quantity}</td>
@@ -131,7 +124,7 @@ export default async function Page({ params }: { params: Promise<Params> }) {
                   <td className="py-2 pr-3">{it.notes || "—"}</td>
                 </tr>
               ))}
-              {lead.items.length === 0 && (
+              {l.items.length === 0 && (
                 <tr>
                   <td colSpan={7} className="py-6 text-center text-gray-500">
                     Aucun article.
@@ -144,9 +137,9 @@ export default async function Page({ params }: { params: Promise<Params> }) {
       </section>
 
       <section className="rounded-lg border p-4">
-        <h2 className="font-medium mb-3">Fichiers ({lead.files.length})</h2>
+        <h2 className="font-medium mb-3">Fichiers ({l.files.length})</h2>
         <ul className="list-disc pl-5 text-sm space-y-1">
-          {lead.files.map((f: FileRef) => (
+          {l.files.map((f) => (
             <li key={f.id}>
               <a
                 href={f.url ?? "#"}
@@ -159,7 +152,7 @@ export default async function Page({ params }: { params: Promise<Params> }) {
               <span className="text-gray-500">({f.mime}, {Math.round(f.size / 1024)} Ko)</span>
             </li>
           ))}
-          {lead.files.length === 0 && <li className="text-gray-500">Aucun fichier.</li>}
+          {l.files.length === 0 && <li className="text-gray-500">Aucun fichier.</li>}
         </ul>
       </section>
     </main>
