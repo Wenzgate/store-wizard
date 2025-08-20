@@ -61,7 +61,7 @@ export default function HelpTooltip({
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.98 }}
             transition={{ duration: 0.12 }}
-            className={`pointer-events-none absolute z-50 max-w-xs rounded-md border border-border bg-bg px-3 py-2 text-xs text-fg shadow`}
+            className={`pointer-events-none absolute z-50 max-w-xs w-100 rounded-md border border-border bg-bg px-3 py-2 text-xs text-fg shadow`}
             style={{ transformOrigin: "center" }}
             data-side={side}
           >

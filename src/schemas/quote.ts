@@ -23,8 +23,8 @@ import type {
 const trim = (s: string) => s.trim();
 
 // Bornes métiers
-export const MIN_DIM_CM = 20;
-export const MAX_DIM_CM = 500;
+export const MIN_DIM_MM = 200;
+export const MAX_DIM_MM = 5000;
 export const MIN_TOLERANCE_CM = 0;
 export const MAX_TOLERANCE_CM = 5;
 export const MAX_FILES = 6;
@@ -60,36 +60,14 @@ export const FileRefSchema = z.object({
 });
 // (on ne force pas avec `satisfies z.ZodType<FileRef>` pour éviter des incompatibilités internes)
 
-// Tissu & couleur
-export const FabricSchema = z.object({
-  brand: z.union([z.literal("BANDALUX"), z.literal("OTHER")]).optional(),
-  collection: z.string().trim().optional(),
-  colorName: z.string().trim().optional(),
-  colorCode: z.string().trim().optional(),
-  opennessFactorPct: z.number().min(0).max(100).nullable().optional(),
-  opacity: FabricOpacityEnum.optional(),
-  notes: z.string().trim().optional(),
-});
 
-export const ColorPreferenceSchema = z.object({
-  tone: z
-    .union([
-      z.literal("WHITE"),
-      z.literal("NEUTRAL"),
-      z.literal("WARM"),
-      z.literal("COOL"),
-      z.literal("DARK"),
-      z.literal("CUSTOM"),
-    ])
-    .optional(),
-  custom: z.string().trim().nullable().optional(),
-});
+
+
 
 // Dimensions
 export const DimensionsSchema = z.object({
-  width: z.number().min(MIN_DIM_CM).max(MAX_DIM_CM),
-  height: z.number().min(MIN_DIM_CM).max(MAX_DIM_CM),
-  toleranceCm: z.number().min(MIN_TOLERANCE_CM).max(MAX_TOLERANCE_CM).optional(),
+  width: z.number().min(MIN_DIM_MM).max(MAX_DIM_MM),
+  height: z.number().min(MIN_DIM_MM).max(MAX_DIM_MM),
 });
 
 // Item
@@ -102,7 +80,6 @@ export const StoreItemSchema = z.object({
   windowType: WindowTypeEnum.optional(),
   mount: MountTypeEnum,
   control: ControlEnum,
-  controlSide: ControlSideEnum.optional(),
   motor: z
     .object({
       brand: z.string().trim().nullable().optional(),
@@ -111,8 +88,6 @@ export const StoreItemSchema = z.object({
     })
     .nullable()
     .optional(),
-  fabric: FabricSchema.nullable().optional(),
-  color: ColorPreferenceSchema.nullable().optional(),
   dims: DimensionsSchema,
   notes: z.string().trim().nullable().optional(),
   files: z.array(FileRefSchema).max(MAX_FILES_PER_ITEM).optional(),
@@ -145,8 +120,6 @@ export const AddressSchema = z.object({
 });
 
 export const ProjectInfoSchema = z.object({
-  budget: BudgetRangeEnum.nullable().optional(),
-  timing: TimingEnum.nullable().optional(),
   address: AddressSchema.nullable().optional(),
   notes: z.string().trim().nullable().optional(),
 });
@@ -159,7 +132,13 @@ export const QuoteRequestSchema = z
     items: z.array(StoreItemSchema).min(1).max(50),
     customer: CustomerInfoSchema,
     project: ProjectInfoSchema.nullable().optional(),
-    files: z.array(FileRefSchema).max(MAX_FILES).optional(),
+    files: z
+    .array(
+      z.any().refine((v) => typeof File !== "undefined" ? v instanceof File : true, "Fichier invalide")
+    )
+    .max(10)
+    .optional()
+    .default([]),
     // Zod v4 "classic": on utilise { message } et pas { errorMap }
     consentRgpd: z.literal(true, { message: "Le consentement RGPD est requis." }),
     acceptEstimateOnly: z.boolean().optional(),
@@ -180,13 +159,7 @@ export const QuoteRequestSchema = z
 
     // Si control = CHAIN ou CRANK → controlSide requis
     data.items.forEach((it, idx) => {
-      if ((it.control === "CHAIN" || it.control === "CRANK") && !it.controlSide) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "Le côté de manoeuvre est requis pour ce type de commande.",
-          path: ["items", idx, "controlSide"],
-        });
-      }
+      
       // Si control = MOTOR → préciser motor.power
       if (it.control === "MOTOR" && !it.motor?.power) {
         ctx.addIssue({
@@ -209,8 +182,7 @@ export function safeParseQuoteRequest(input: unknown) {
 
 export {
   FileRefSchema as ZFileRef,
-  FabricSchema as ZFabric,
-  ColorPreferenceSchema as ZColorPreference,
+  
   DimensionsSchema as ZDimensions,
   StoreItemSchema as ZStoreItem,
   CustomerInfoSchema as ZCustomerInfo,

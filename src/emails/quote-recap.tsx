@@ -43,7 +43,7 @@ function labelType(v: StoreItem["type"]) {
   )[v];
 }
 function labelMount(v: StoreItem["mount"]) {
-  return ({ INSIDE: "Pose tableau", OUTSIDE: "Recouvrement mural", CEILING: "Pose plafond" } as const)[v];
+  return ({ INSIDE: "Intérieur", OUTSIDE: "Extérieur", CEILING: "Pose plafond" } as const)[v];
 }
 function labelControl(it: StoreItem) {
   const side = it.controlSide ? (it.controlSide === "LEFT" ? " — côté gauche" : " — côté droit") : "";
@@ -145,7 +145,7 @@ export function renderQuoteEmailHTML(q: QuoteRequest, opts?: { adminUrl?: string
                       .join(" · ")
                   : ""
               )}
-              ${row("Pièce", it.roomLabel || (it.room ? String(it.room) : ""))}
+              ${row("Pièce*", it.roomLabel || (it.room ? String(it.room) : ""))}
               ${row("Ouverture", it.windowType ? String(it.windowType) : "")}
               ${row("Notes", it.notes || "")}
             </table>

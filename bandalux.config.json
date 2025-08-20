@@ -14,9 +14,9 @@
         { "id": "cassette", "label": "Coffre / Cassette", "synonyms": ["coffre", "box"], "mapsTo": { "type": "CASSETTE" } }
       ],
       "mounts": [
-        { "id": "inside-recess", "label": "Pose tableau (intérieur)", "mapsTo": { "mount": "INSIDE" } },
-        { "id": "wall-face", "label": "Recouvrement mural", "mapsTo": { "mount": "OUTSIDE" } },
-        { "id": "ceiling", "label": "Pose plafond", "mapsTo": { "mount": "CEILING" } }
+        { "id": "inside-recess", "label": "Intérieur", "mapsTo": { "mount": "INSIDE" } },
+        { "id": "wall-face", "label": "Extérieur", "mapsTo": { "mount": "OUTSIDE" } }
+        
       ],
       "controls": [
         { "id": "chain", "label": "Chaînette", "mapsTo": { "control": "CHAIN" } },

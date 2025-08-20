@@ -1,3 +1,4 @@
+// src/components/forms/FileDrop.tsx
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -97,25 +98,41 @@ export default function FileDrop({
 
   const onInputChange = useCallback<React.ChangeEventHandler<HTMLInputElement>>(
     (e) => {
-      const files = Array.from(e.target.files ?? []);
+      // capture l’élément et les fichiers immédiatement
+      const inputEl = e.currentTarget;
+      const files = Array.from(inputEl.files ?? []);
+
       const { ok, errors } = validate(files);
       setMsgs(errors);
       if (ok.length) emit([...local, ...ok]);
-      // reset input to allow re-select same file
-      e.currentTarget.value = "";
+
+      // reset input de manière sûre (évite e.currentTarget=null)
+      if (inputRef.current) {
+        inputRef.current.value = "";
+      } else {
+        // fallback au cas où
+        try {
+          inputEl.value = "";
+        } catch {
+          /* ignore */
+        }
+      }
     },
     [emit, local, validate]
   );
 
-  const onDrop = useCallback((ev: React.DragEvent) => {
-    ev.preventDefault();
-    ev.stopPropagation();
-    setDrag(false);
-    const files = Array.from(ev.dataTransfer.files ?? []);
-    const { ok, errors } = validate(files);
-    setMsgs(errors);
-    if (ok.length) emit([...local, ...ok]);
-  }, [emit, local, validate]);
+  const onDrop = useCallback(
+    (ev: React.DragEvent) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      setDrag(false);
+      const files = Array.from(ev.dataTransfer.files ?? []);
+      const { ok, errors } = validate(files);
+      setMsgs(errors);
+      if (ok.length) emit([...local, ...ok]);
+    },
+    [emit, local, validate]
+  );
 
   const onRemove = useCallback(
     (idx: number) => {
@@ -158,8 +175,10 @@ export default function FileDrop({
         aria-label="Déposer des fichiers ou parcourir"
         className={[
           "relative flex min-h-[120px] w-full cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed p-4 text-center outline-none transition",
-          drag ? "border-[hsl(var(--brand))] bg-[hsl(var(--brand))/0.05]" : "border-border hover:bg-black/5 dark:hover:bg-white/5",
-          error ? "ring-2 ring-red-500/50" : ""
+          drag
+            ? "border-[hsl(var(--brand))] bg-[hsl(var(--brand))/0.05]"
+            : "border-border hover:bg-black/5 dark:hover:bg-white/5",
+          error ? "ring-2 ring-red-500/50" : "",
         ].join(" ")}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
@@ -169,6 +188,7 @@ export default function FileDrop({
         }}
         aria-describedby={error ? `${name}-error` : undefined}
         aria-invalid={!!error}
+        onClick={() => inputRef.current?.click()}
       >
         <input
           ref={inputRef}
@@ -218,9 +238,7 @@ export default function FileDrop({
                     <p className="truncate text-sm" title={f.name}>
                       {f.name}
                     </p>
-                    <p className="text-xs text-muted">
-                      {(f.size / 1024).toFixed(0)} Ko
-                    </p>
+                    <p className="text-xs text-muted">{(f.size / 1024).toFixed(0)} Ko</p>
                   </div>
                   <button
                     type="button"
