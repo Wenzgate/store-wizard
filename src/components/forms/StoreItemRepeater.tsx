@@ -194,8 +194,8 @@ function ItemCard({ index, onRemove }: { index: number; onRemove: () => void }) 
           <label className="mb-1 block text-sm font-medium">Largeur (mm)*</label>
           <input
             type="number"
-            min={20}
-            max={500}
+            min={200}
+            max={5000}
             {...register(`items.${index}.dims.width` as const, { valueAsNumber: true })}
             className="w-full rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
           />
@@ -204,8 +204,8 @@ function ItemCard({ index, onRemove }: { index: number; onRemove: () => void }) 
           <label className="mb-1 block text-sm font-medium">Hauteur (mm)*</label>
           <input
             type="number"
-            min={20}
-            max={500}
+            min={200}
+            max={5000}
             {...register(`items.${index}.dims.height` as const, { valueAsNumber: true })}
             className="w-full rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
           />

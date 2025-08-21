@@ -3,7 +3,6 @@ import { NextResponse } from "next/server";
 import { QuoteRequestSchema } from "@/schemas/quote";
 import type { QuoteRequest } from "@/types/quote";
 import { ipFromRequest, rateLimiter } from "@/lib/ratelimit";
-import { validateAllFiles, storeFilesDev } from "@/lib/upload";
 import { PrismaClient } from "@prisma/client";
 import { renderQuoteEmailHTML } from "@/emails/quote-recap";
 import { generateQuotePdf } from "@/server/pdf";
@@ -24,10 +23,34 @@ if (!(globalThis as any).__prisma) (globalThis as any).__prisma = prisma;
 
 export const runtime = "nodejs";
 
+// ============ Optional storage (Vercel Blob) ============
+type UploadFn = (file: File, path: string) => Promise<{ url: string }>;
+let uploadToBlob: UploadFn | null = null;
+(async () => {
+  try {
+    const { put } = await import("@vercel/blob");
+    uploadToBlob = async (file: File, path: string) => {
+      const buf = Buffer.from(await file.arrayBuffer());
+      const r = await put(path, buf, {
+        access: "public", // ⚠️ mettre "public" pour que les emails affichent l’image
+        contentType: file.type || "application/octet-stream",
+      });
+      return { url: r.url };
+    };
+  } catch {
+    // pas de blob dispo en local/dev
+  }
+})();
+
 /**
  * POST /api/quote
- * ?debug=1      -> ne persiste pas / n’envoie pas d’email, renvoie tout ce qui a été reçu + fichiers validés
- * ?imgdebug=1   -> ENVOIE un email "test images" (sans passer par renderQuoteEmailHTML) pour voir si les <img> s’affichent
+ * ?debug=1      -> ne persiste pas / n’envoie pas d’email
+ * ?imgdebug=1   -> envoie un email test avec des <img>
+ *
+ * Côté client :
+ *  - formData.append("data", JSON.stringify(QuoteRequest sans File[]))
+ *  - formData.append("rootFiles", file)
+ *  - formData.append(`itemFiles_${i}`, file)
  */
 export async function POST(req: Request) {
   const ip = ipFromRequest(req);
@@ -45,26 +68,29 @@ export async function POST(req: Request) {
         }
       );
     }
-  } catch {
-    // pas bloquant
-  }
+  } catch {}
 
-  // --- Lecture JSON
-  let body: unknown;
+  // --- Lire formData
+  let form: FormData;
   try {
-    body = await req.json();
+    form = await req.formData();
   } catch {
-    return json({ error: "Requête invalide: JSON attendu." }, 400);
+    return json({ error: "Requête invalide: multipart/form-data attendu." }, 400);
   }
 
-  // --- Validation Zod (strict)
-  const parsed = QuoteRequestSchema.safeParse(body);
+  // --- Champ JSON "data"
+  const raw = form.get("data");
+  if (typeof raw !== "string") {
+    return json({ error: "Champ 'data' manquant (JSON sérialisé)." }, 400);
+  }
+
+  const parsed = QuoteRequestSchema.safeParse(JSON.parse(raw));
   if (!parsed.success) {
     return json({ error: "Validation échouée.", details: parsed.error.flatten() }, 422);
   }
   const data = parsed.data as QuoteRequest;
 
-  // --- Honeypot anti‑spam
+  // --- Honeypot anti-spam
   if ((data.honeypot ?? "") !== "") {
     return json({ id: "ok" }, 200);
   }
@@ -74,100 +100,58 @@ export async function POST(req: Request) {
   const DEBUG = url.searchParams.get("debug") === "1" || req.headers.get("x-debug") === "1";
   const IMGDEBUG = url.searchParams.get("imgdebug") === "1" || req.headers.get("x-imgdebug") === "1";
 
-  // --- Validation & collecte des fichiers (métadonnées)
-  let filesMeta: ReturnType<typeof validateAllFiles>;
-  try {
-    filesMeta = validateAllFiles(data);
-  } catch (e: any) {
-    return json({ error: e?.message ?? "Erreur fichiers." }, 400);
-  }
+  // --- Fichiers globaux et par item
+  const rootFiles = form.getAll("rootFiles").filter((x): x is File => x instanceof File);
+  const itemFiles: File[][] = [];
+  (data.items ?? []).forEach((_, i) => {
+    const arr = form.getAll(`itemFiles_${i}`).filter((x): x is File => x instanceof File);
+    itemFiles[i] = arr;
+  });
 
-  // --- Log lisible
-  try {
-    const g = filesMeta.globals;
-    const perItemCounts = Object.fromEntries(
-      Object.entries(filesMeta.perItem).map(([k, arr]) => [k, arr.length])
-    );
-    console.log("[api/quote] Files summary =>", {
-      globalsCount: g.length,
-      globalsNames: g.map(f => f.name),
-      perItemCounts,
-      // IMPORTANT: on logge les URLs telles qu'on les a (pour comprendre pourquoi ça casse)
-      globalsUrls: g.map(f => f.url),
-      perItemUrls: Object.fromEntries(
-        Object.entries(filesMeta.perItem).map(([k, arr]) => [k, arr.map(f => f.url)])
-      ),
-    });
-  } catch {}
+  // Log rapide
+  console.log("[api/quote] Files =>", {
+    root: rootFiles.map((f) => f.name),
+    perItem: itemFiles.map((arr, i) => ({ i, names: arr.map((f) => f.name) })),
+  });
 
-  // --- Mode DEBUG : on renvoie tel quel (aucune DB, aucun email)
+  // --- Mode DEBUG
   if (DEBUG) {
     return json({
       debug: true,
       received: data,
-      validatedFiles: filesMeta,
-      note: "DEBUG=1: aucune persistance ni email. Regarde dans validatedFiles.globals/perItem les URLs: elles DOIVENT être absolues en HTTPS pour s’afficher en email.",
-    }, 200);
+      files: {
+        rootNames: rootFiles.map((f) => f.name),
+        perItemNames: itemFiles.map((arr) => arr.map((f) => f.name)),
+      },
+      note: "DEBUG=1: aucune persistance ni email.",
+    });
   }
 
-  // --- En mode "IMGDEBUG", on envoie un email de TEST IMAGES (sans DB) pour vérifier l’affichage <img>
+  // --- Mode IMGDEBUG
   if (IMGDEBUG) {
-    const publicBase = (process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || "").replace(/\/+$/, "");
-    // On ne garde que des URLs ABSOLUES HTTPS (les clients mail bloquent http/relative/file)
-    const allUrls = [
-      // image publique de test
-      "https://picsum.photos/seed/anderlechtdecor/600/400",
-      // toutes les supposées URLs d’images "globales"
-      ...(filesMeta.globals ?? []).map(f => f.url || "").filter(u => isHttpsAbsolute(u)),
-      // toutes les supposées URLs d’images par item
-      ...Object.values(filesMeta.perItem).flat().map(f => f.url || "").filter(u => isHttpsAbsolute(u)),
-    ];
-
     const html = `
-      <div style="font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif">
+      <div>
         <h1>🧪 Test Images Email</h1>
-        <p>But : vérifier si les clients mail chargent bien des <code>&lt;img src="https://..."&gt;</code>.</p>
-        <ol>
-          ${allUrls.map(u => `
-            <li style="margin-bottom:16px">
-              <div>URL: <a href="${u}" target="_blank" rel="noreferrer">${escapeHtml(u)}</a></div>
-              <div style="margin-top:8px">
-                <img src="${u}" alt="test-img" style="max-width:560px;border:1px solid #ddd;border-radius:8px"/>
-              </div>
-            </li>
-          `).join("")}
-        </ol>
-        ${!publicBase ? `<p style="color:#b00">⚠️ NEXT_PUBLIC_SITE_URL n’est pas configurée → tes URLs risquent d’être relatives / locales.</p>` : ""}
-        <p style="margin-top:24px;color:#666">Si une image est cassée ici, son URL n’est pas publiquement accessible en HTTPS.</p>
-      </div>
-    `;
-
-    try {
-      if (resend) {
-        await resend.emails.send({
-          from: SENDER_EMAIL,
-          to: [RECEIVER_EMAIL],
-          subject: "🧪 Test Images Email (imgdebug)",
-          html,
-        });
-      } else {
-        console.log("[email:stub IMGDEBUG] To:", RECEIVER_EMAIL);
-        console.log(html.slice(0, 800) + "...");
-      }
-      return json({ ok: true, note: "Email de test images envoyé. Ouvre-le sur ton client mail et regarde si les images s’affichent." }, 200);
-    } catch (e: any) {
-      console.warn("[api/quote] Envoi email (imgdebug) échoué:", e?.message);
-      return json({ error: "Échec envoi email test images", details: e?.message }, 500);
+        <img src="https://picsum.photos/seed/anderlechtdecor/600/400" alt="test"/>
+      </div>`;
+    if (resend) {
+      await resend.emails.send({
+        from: SENDER_EMAIL,
+        to: [RECEIVER_EMAIL],
+        subject: "🧪 Test Images Email (imgdebug)",
+        html,
+      });
     }
+    return json({ ok: true, note: "Email test images envoyé" });
   }
 
-  // --- Mode normal : on persiste, puis on envoie l’email “vrai”
+  // --- Mode normal
   try {
     const userAgent = req.headers.get("user-agent") ?? "";
-    const referrer = req.headers.get("referer") ?? req.headers.get("referrer") ?? "";
+    const referrer = req.headers.get("referer") ?? "";
     const ipHash = await sha256(`${ip}|${userAgent}`);
 
-    // Persist QuoteRequest
+    // 1) Persist QuoteRequest
     const qr = await prisma.quoteRequest.create({
       data: {
         firstName: data.customer.firstName,
@@ -183,8 +167,6 @@ export async function POST(req: Request) {
         country: data.project?.address?.country ?? null,
         notes: data.project?.notes ?? null,
         consentRgpd: data.consentRgpd,
-        acceptEstimateOnly: data.acceptEstimateOnly ?? null,
-        honeypot: data.honeypot ?? null,
         source: (data.source as any) ?? "WEBSITE",
         locale: data.locale ?? "fr",
         referrer,
@@ -193,7 +175,7 @@ export async function POST(req: Request) {
       },
     });
 
-    // Persist items
+    // 2) Persist items
     const createdItems = await Promise.all(
       (data.items ?? []).map((it) =>
         prisma.storeItem.create({
@@ -202,112 +184,104 @@ export async function POST(req: Request) {
             type: it.type as any,
             quantity: it.quantity,
             room: (it.room as any) ?? null,
-            roomLabel: it.roomLabel ?? null,
             windowType: (it.windowType as any) ?? null,
             mount: it.mount as any,
             control: it.control as any,
-            controlSide: (it.controlSide as any) ?? null,
-            motorBrand: it.motor?.brand ?? null,
-            motorPower: (it.motor?.power as any) ?? null,
-            motorNotes: it.motor?.notes ?? null,
-            fabricBrand: it.fabric?.brand ?? null,
-            fabricCollection: it.fabric?.collection ?? null,
-            fabricColorName: it.fabric?.colorName ?? null,
-            fabricColorCode: it.fabric?.colorCode ?? null,
-            fabricOpennessPct: it.fabric?.opennessFactorPct ?? null,
-            fabricOpacity: (it.fabric?.opacity as any) ?? null,
-            colorTone: it.color?.tone ?? null,
-            colorCustom: it.color?.custom ?? null,
             width: it.dims.width,
             height: it.dims.height,
-            toleranceCm: it.dims.toleranceCm ?? null,
             notes: it.notes ?? null,
           },
         })
       )
     );
 
-    // Stockage des fichiers (stub dev)
-    const { globals, perItem } = filesMeta;
-    await storeFilesDev([...globals, ...Object.values(perItem).flat()]);
+    // 3) Upload / DB FileRefs
+    type FileRefLite = { name: string; mime: string; size: number; url?: string | null; scope: "ROOT" | `ITEM_${number}` };
+    const fileRefs: FileRefLite[] = [];
 
-    // Liens de fichiers en DB
-    const globalFilesCreate = globals.map((f) =>
-      prisma.fileRef.create({
-        data: {
-          quoteRequestId: qr.id,
-          name: f.name,
-          mime: mimeToEnum(f.mime),
-          size: f.size,
-          url: f.url,
-          sha256: f.sha256 ?? null,
-        },
-      })
+    const saveOne = async (f: File, scope: FileRefLite["scope"]) => {
+      let url: string | null = null;
+      if (uploadToBlob && process.env.VERCEL_BLOB_READ_WRITE_TOKEN) {
+        try {
+          const safeName = f.name.replace(/[^\w.\-]/g, "_");
+          const path = `quotes/${qr.id}/${scope}/${Date.now()}_${safeName}`;
+          const r = await uploadToBlob(f, path);
+          url = r.url;
+        } catch {}
+      }
+      fileRefs.push({ name: f.name, mime: f.type, size: f.size, url, scope });
+    };
+
+    for (const f of rootFiles) await saveOne(f, "ROOT");
+    for (let i = 0; i < itemFiles.length; i++) {
+      for (const f of itemFiles[i]) await saveOne(f, `ITEM_${i}`);
+    }
+
+    // DB insert
+    await Promise.all(
+      fileRefs.map((fr) =>
+        prisma.fileRef.create({
+          data:
+            fr.scope === "ROOT"
+              ? {
+                  quoteRequestId: qr.id,
+                  name: fr.name,
+                  mime: mimeToEnum(fr.mime),
+                  size: fr.size,
+                  url: fr.url ?? null,
+                }
+              : {
+                  storeItemId: createdItems[parseInt(fr.scope.split("_")[1])].id,
+                  name: fr.name,
+                  mime: mimeToEnum(fr.mime),
+                  size: fr.size,
+                  url: fr.url ?? null,
+                },
+        })
+      )
     );
 
-    const perItemFilesCreate = createdItems.flatMap((created, idx) => {
-      const key = data.items?.[idx]?.id ?? "";
-      const files = perItem[key] ?? [];
-      return files.map((f) =>
-        prisma.fileRef.create({
-          data: {
-            storeItemId: created.id,
-            name: f.name,
-            mime: mimeToEnum(f.mime),
-            size: f.size,
-            url: f.url,
-            sha256: f.sha256 ?? null,
-          },
-        })
-      );
-    });
-
-    await Promise.all([...globalFilesCreate, ...perItemFilesCreate]);
-
-    // Email + PDF
-    const publicBase = process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || "";
-    const base = publicBase ? publicBase.replace(/\/+$/, "") : "";
+    // 4) Préparer email
+    const base = (process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || "").replace(/\/+$/, "");
     const adminUrl = base ? `${base}/admin/leads/${qr.id}` : "";
-
-    // On passe des URLs publiques (si dispo) dans le contexte pour les afficher dans l’email.
-    const urlsPublics: string[] = [
-      ...(globals ?? []).map(f => f.url || "").filter(u => isHttpsAbsolute(u)),
-      ...Object.values(perItem).flat().map(f => f.url || "").filter(u => isHttpsAbsolute(u)),
-    ];
-
-    console.log("[api/quote] URLs publiques pour email:", urlsPublics);
+    const urlsPubliques = fileRefs.map((fr) => fr.url || "").filter(isHttpsAbsolute);
 
     const emailHtml = renderQuoteEmailHTML(
       { ...data, id: qr.id },
-      { adminUrl, publicBaseUrl: base, imageUrls: urlsPublics } as any
+      { adminUrl, publicBaseUrl: base, imageUrls: urlsPubliques } as any
     );
 
-    // Génère le PDF (best-effort)
+    // Attachments
+    const allFilesFlat: File[] = [...rootFiles, ...itemFiles.flat()];
+    const attachments =
+      allFilesFlat.length > 0
+        ? await Promise.all(
+            allFilesFlat.map(async (f) => ({
+              filename: f.name,
+              content: Buffer.from(await f.arrayBuffer()).toString("base64"),
+            }))
+          )
+        : [];
+
+    // PDF (optionnel)
     try {
       const pdf = await generateQuotePdf({ ...data, id: qr.id });
       const tmpFile = join(os.tmpdir(), `quote-${qr.id}.pdf`);
       await writeFile(tmpFile, pdf);
+      // attachments.push({ filename: `devis-${qr.id}.pdf`, content: pdf.toString("base64") });
     } catch (e) {
       console.warn("[api/quote] PDF non généré:", (e as any)?.message);
     }
 
-    // Envoi e‑mail
-    try {
-      if (resend) {
-        await resend.emails.send({
-          from: SENDER_EMAIL,
-          to: [RECEIVER_EMAIL],
-          subject: `Nouvelle demande d’estimation #${qr.id.slice(0, 8)}`,
-          html: emailHtml,
-          // NOTE: si tes images n’ont PAS d’URL publiques, les clients mail ne pourront pas les charger.
-          // Resend ne gère pas les cid inline comme Nodemailer — donc privilégie des URLs HTTPS publiques.
-        });
-      } else {
-        console.log("[email:stub] To:", RECEIVER_EMAIL);
-        console.log(emailHtml.slice(0, 600) + "...");
-      }
-    } catch (e) {
-      console.warn("[api/quote] Envoi email échoué:", (e as any)?.message);
+    // Envoi email
+    if (resend) {
+      await resend.emails.send({
+        from: SENDER_EMAIL,
+        to: [RECEIVER_EMAIL],
+        subject: `Nouvelle demande #${qr.id.slice(0, 8)}`,
+        html: emailHtml,
+        attachments,
+      });
     }
 
     return json({ id: qr.id }, 201);
@@ -318,14 +292,10 @@ export async function POST(req: Request) {
 }
 
 /* ----------------- Helpers ----------------- */
-
 function json(data: unknown, status = 200, headers?: Record<string, string>) {
   return new NextResponse(JSON.stringify(data), {
     status,
-    headers: {
-      "content-type": "application/json; charset=utf-8",
-      ...headers,
-    },
+    headers: { "content-type": "application/json; charset=utf-8", ...headers },
   });
 }
 
@@ -335,16 +305,11 @@ async function sha256(s: string): Promise<string> {
 
 function mimeToEnum(m: string): any {
   switch (m) {
-    case "image/jpeg":
-      return "image_jpeg";
-    case "image/png":
-      return "image_png";
-    case "image/webp":
-      return "image_webp";
-    case "application/pdf":
-      return "application_pdf";
-    default:
-      return "application_octetstream";
+    case "image/jpeg": return "image_jpeg";
+    case "image/png": return "image_png";
+    case "image/webp": return "image_webp";
+    case "application/pdf": return "application_pdf";
+    default: return "application_octetstream";
   }
 }
 
@@ -353,16 +318,9 @@ function isHttpsAbsolute(u: string | null | undefined): boolean {
   try {
     const x = new URL(u);
     return x.protocol === "https:";
-  } catch {
-    return false;
-  }
+  } catch { return false; }
 }
 
 function escapeHtml(s: string) {
-  return s
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
+  return s.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#39;");
 }

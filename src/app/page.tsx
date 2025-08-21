@@ -1,6 +1,7 @@
 // src/app/devis/page.tsx
 "use client";
 import { useSearchParams } from "next/navigation";
+import { Controller } from "react-hook-form"; // ajoute cet import en haut
 
 import { z } from "zod";
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
@@ -440,34 +441,85 @@ const isDebug = sp?.get("debug") === "1";
     return { uploadedGlobals, uploadedPerItem };
   }
   
+  // const onSubmit = async (data: QuoteFormValues) => {
+  //   if (Date.now() < transitionGuardUntilRef.current) {
+  //     return;
+  //   }
+  //   if (!submitIntentRef.current) {
+  //     return;
+  //   }
+  //   submitIntentRef.current = false;
+  
+  //   setIsSubmitting(true);
+  //   setSubmitError(null);
+  
+  //   try {
+  //     // Upload all files (global + per item)
+  //     const { uploadedGlobals, uploadedPerItem } = await preUploadAllFiles(data);
+  
+  //     // Build payload with uploaded file references (with URLs)
+  //     const payload: QuoteFormValues = {
+  //       ...data,
+  //       items: (data.items ?? []).map((it: any) => ({
+  //         ...it,
+  //         files: uploadedPerItem[it.id] ?? [],
+  //       })),
+  //       files: uploadedGlobals,
+  //     };
+  
+  //     // Validate payload strictly with Zod schema
+  //     const parsed = QuoteRequestSchema.safeParse(payload);
+  //     if (!parsed.success) {
+  //       console.error(parsed.error.flatten());
+  //       alert("Certaines informations sont manquantes ou invalides. Vérifiez le formulaire.");
+  //       setIsSubmitting(false);
+  //       jumpTo("items");
+  //       return;
+  //     }
+  
+  //     // Send final JSON payload with uploaded file URLs
+  //     const res = await fetch("/api/quote", {
+  //       method: "POST",
+  //       headers: { "Content-Type": "application/json" },
+  //       body: JSON.stringify(parsed.data),
+  //     });
+  
+  //     if (!res.ok) {
+  //       const msg = await safeReadError(res);
+  //       setSubmitError(`Échec d’envoi: ${msg}`);
+  //       setIsSubmitting(false);
+  //       return;
+  //     }
+  
+  //     track("quote_submit", { items: parsed.data.items.length });
+  //     localStorage.removeItem(DRAFT_KEY);
+  //     setCurrentIdx(STEPS.findIndex((s) => s.id === "done"));
+  //   } catch (e: any) {
+  //     setSubmitError(e?.message ?? "Erreur réseau");
+  //   } finally {
+  //     setIsSubmitting(false);
+  //   }
+  // };
   const onSubmit = async (data: QuoteFormValues) => {
-    if (Date.now() < transitionGuardUntilRef.current) {
-      return;
-    }
-    if (!submitIntentRef.current) {
-      return;
-    }
+    // 1) Anti "ghost submit" après changement d’étape
+    if (Date.now() < transitionGuardUntilRef.current) return;
+    // 2) N'autoriser que le clic explicite sur "Envoyer"
+    if (!submitIntentRef.current) return;
     submitIntentRef.current = false;
   
     setIsSubmitting(true);
     setSubmitError(null);
   
     try {
-      // Upload all files (global + per item)
-      const { uploadedGlobals, uploadedPerItem } = await preUploadAllFiles(data);
-  
-      // Build payload with uploaded file references (with URLs)
-      const payload: QuoteFormValues = {
+      // --- A. Préparer les données pour la validation côté serveur (sans File[])
+      const dataForServer: QuoteFormValues = {
         ...data,
-        items: (data.items ?? []).map((it: any) => ({
-          ...it,
-          files: uploadedPerItem[it.id] ?? [],
-        })),
-        files: uploadedGlobals,
+        files: undefined as any,
+        items: (data.items ?? []).map((it: any) => ({ ...it, files: undefined as any })),
       };
   
-      // Validate payload strictly with Zod schema
-      const parsed = QuoteRequestSchema.safeParse(payload);
+      // --- B. Validation stricte Zod
+      const parsed = QuoteRequestSchema.safeParse(dataForServer);
       if (!parsed.success) {
         console.error(parsed.error.flatten());
         alert("Certaines informations sont manquantes ou invalides. Vérifiez le formulaire.");
@@ -475,12 +527,34 @@ const isDebug = sp?.get("debug") === "1";
         jumpTo("items");
         return;
       }
+
+      console.log("data.files", (data as any).files);
+console.log("item.files", (data.items ?? []).map((it) => it.files));
+
   
-      // Send final JSON payload with uploaded file URLs
+      // --- C. Construire le FormData (JSON + fichiers)
+      const fd = new FormData();
+      // 1) Données propres (sans File[]) pour la route API
+      fd.append("data", JSON.stringify(parsed.data));
+  
+      // 2) Fichiers globaux
+      const rootFiles = ((data as any).files ?? []) as File[];
+      for (const f of rootFiles) {
+        fd.append("rootFiles", f, f.name);
+      }
+  
+      // 3) Fichiers par item
+      (data.items ?? []).forEach((it: any, i: number) => {
+        const itemFs = ((it?.files ?? []) as File[]);
+        for (const f of itemFs) {
+          fd.append(`itemFiles_${i}`, f, f.name);
+        }
+      });
+  
+      // --- D. Envoi vers l’API (multipart — ne PAS fixer content-type)
       const res = await fetch("/api/quote", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(parsed.data),
+        body: fd,
       });
   
       if (!res.ok) {
@@ -490,7 +564,8 @@ const isDebug = sp?.get("debug") === "1";
         return;
       }
   
-      track("quote_submit", { items: parsed.data.items.length });
+      // --- E. Succès
+      track("quote_submit", { items: (parsed.data.items ?? []).length });
       localStorage.removeItem(DRAFT_KEY);
       setCurrentIdx(STEPS.findIndex((s) => s.id === "done"));
     } catch (e: any) {
@@ -499,6 +574,7 @@ const isDebug = sp?.get("debug") === "1";
       setIsSubmitting(false);
     }
   };
+  
 
   async function safeReadError(res: Response) {
     try {
@@ -858,8 +934,127 @@ function StepContact() {
   );
 }
 
+// function StepRecap({ onEdit }: { onEdit: (id: StepId) => void }) {
+//   const { getValues } = useFormContextStrict();
+//   const v = getValues();
+//   const [showJson, setShowJson] = useState(false);
+//   const json = useMemo(() => JSON.stringify(stripFilesForDraft(v), null, 2), [v]);
+
+//   const copyJson = async () => {
+//     try {
+//       await navigator.clipboard.writeText(json);
+//       track("recap_copy_json");
+//     } catch {
+//       // ignore
+//     }
+//   };
+
+//   return (
+//     <section className="space-y-4">
+//       <div className="flex items-center justify-between">
+//         <h2 className="text-lg font-semibold">Vérification</h2>
+//         {/* <button
+//           type="button"
+//           onClick={() => setShowJson((s) => !s)}
+//           className="rounded-xl border border-border px-3 py-1.5 text-xs hover:bg-black/5 dark:hover:bg-white/10"
+//         >
+//           {showJson ? "Masquer JSON" : "Voir JSON"}
+//         </button> */}
+//       </div>
+
+//       <div className="rounded-2xl border border-border p-4">
+//         <h3 className="mb-2 text-sm font-medium">Coordonnées</h3>
+//         <p className="text-sm">
+//           {v.customer?.firstName} {v.customer?.lastName} — {v.customer?.email}
+//           {v.customer?.phone ? ` — ${v.customer.phone}` : ""}
+//         </p>
+//         <p className="text-sm text-muted">
+//           {[
+//             v.project?.address?.street,
+//             v.project?.address?.postalCode,
+//             v.project?.address?.city,
+//             v.project?.address?.country,
+//           ]
+//             .filter(Boolean)
+//             .join(", ") || "Adresse non précisée"}
+//         </p>
+        
+//         <div className="mt-2">
+//           <button
+//             type="button"
+//             onClick={() => onEdit("contact")}
+//             className="rounded-md border border-border px-2 py-1 text-xs hover:bg-black/5 dark:hover:bg-white/10"
+//           >
+//             Modifier coordonnées
+//           </button>
+//         </div>
+//       </div>
+//       <FileDrop name="files" className="mt-4" />
+
+//       {/* Items */}
+//       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+//         {(v.items ?? []).map((it: any, i: number) => (
+//           <article key={it?.id ?? i} className="rounded-2xl border border-border p-4">
+//             <div className="mb-2 flex items-center justify-between">
+//               <h4 className="text-sm font-semibold">Store #{i + 1}</h4>
+//               <button
+//                 type="button"
+//                 onClick={() => onEdit("items")}
+//                 className="rounded-md border border-border px-2 py-1 text-xs hover:bg-black/5 dark:hover:bg-white/10"
+//               >
+//                 Modifier
+//               </button>
+//             </div>
+//             <dl className="space-y-1 text-sm">
+//               <Row label="Type">{typeLabel(it.type as any)}</Row>
+//               <Row label="Quantité">{it.quantity}</Row>
+//               <Row label="Pose">{mountLabel(it.mount as any)}</Row>
+//               {it.windowType && <Row label="Ouverture">{windowLabel(it.windowType as any)}</Row>}
+//               {it.room && (
+//                 <Row label="Pièce*">
+//                   {roomLabel(it.room as any)}
+//                   {it.roomLabel ? ` (${it.roomLabel})` : ""}
+//                 </Row>
+//               )}
+//               <Row label="Commande">{controlLabel(it as any)}</Row>
+//               <Row label="Dimensions">
+//                 {it.dims?.width} × {it.dims?.height} mm
+//               </Row>
+              
+//               {it.notes && (
+//                 <Row label="Notes">
+//                   <em>{it.notes}</em>
+//                 </Row>
+//               )}
+//             </dl>
+//           </article>
+//         ))}
+//       </div>
+
+//       {/* JSON */}
+//       {showJson && (
+//         <div className="rounded-2xl border border-border p-3">
+//           <div className="mb-2 flex items-center justify-between">
+//             <span className="text-sm font-medium">Payload JSON (aperçu)</span>
+//             <button
+//               type="button"
+//               onClick={copyJson}
+//               className="rounded-md border border-border px-2 py-1 text-xs hover:bg-black/5 dark:hover:bg-white/10"
+//             >
+//               Copier
+//             </button>
+//           </div>
+//           <pre className="max-h-72 overflow-auto rounded-lg bg-black/5 p-3 text-xs leading-relaxed dark:bg-white/10">
+//             {json}
+//           </pre>
+//         </div>
+//       )}
+//     </section>
+//   );
+// }
+
 function StepRecap({ onEdit }: { onEdit: (id: StepId) => void }) {
-  const { getValues } = useFormContextStrict();
+  const { getValues, control } = useFormContextStrict();
   const v = getValues();
   const [showJson, setShowJson] = useState(false);
   const json = useMemo(() => JSON.stringify(stripFilesForDraft(v), null, 2), [v]);
@@ -877,15 +1072,9 @@ function StepRecap({ onEdit }: { onEdit: (id: StepId) => void }) {
     <section className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Vérification</h2>
-        {/* <button
-          type="button"
-          onClick={() => setShowJson((s) => !s)}
-          className="rounded-xl border border-border px-3 py-1.5 text-xs hover:bg-black/5 dark:hover:bg-white/10"
-        >
-          {showJson ? "Masquer JSON" : "Voir JSON"}
-        </button> */}
       </div>
 
+      {/* Coordonnées */}
       <div className="rounded-2xl border border-border p-4">
         <h3 className="mb-2 text-sm font-medium">Coordonnées</h3>
         <p className="text-sm">
@@ -902,7 +1091,7 @@ function StepRecap({ onEdit }: { onEdit: (id: StepId) => void }) {
             .filter(Boolean)
             .join(", ") || "Adresse non précisée"}
         </p>
-        
+
         <div className="mt-2">
           <button
             type="button"
@@ -913,7 +1102,20 @@ function StepRecap({ onEdit }: { onEdit: (id: StepId) => void }) {
           </button>
         </div>
       </div>
-      <FileDrop name="files" className="mt-4" />
+
+      {/* 🔗 Brancher FileDrop avec react-hook-form */}
+      <Controller
+        name="files"
+        control={control}
+        render={({ field }) => (
+          <FileDrop
+            name="files"
+            value={field.value}
+            onChange={field.onChange}
+            className="mt-4"
+          />
+        )}
+      />
 
       {/* Items */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -944,7 +1146,7 @@ function StepRecap({ onEdit }: { onEdit: (id: StepId) => void }) {
               <Row label="Dimensions">
                 {it.dims?.width} × {it.dims?.height} mm
               </Row>
-              
+
               {it.notes && (
                 <Row label="Notes">
                   <em>{it.notes}</em>
@@ -955,7 +1157,7 @@ function StepRecap({ onEdit }: { onEdit: (id: StepId) => void }) {
         ))}
       </div>
 
-      {/* JSON */}
+      {/* JSON debug */}
       {showJson && (
         <div className="rounded-2xl border border-border p-3">
           <div className="mb-2 flex items-center justify-between">
