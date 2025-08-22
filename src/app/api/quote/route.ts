@@ -1,4 +1,7 @@
 // src/app/api/quote/route.ts
+export const dynamic = "force-dynamic";
+export const maxDuration = 15; // (facultatif) Vercel serverless timeout
+
 import { NextResponse } from "next/server";
 import { QuoteRequestSchema } from "@/schemas/quote";
 import type { QuoteRequest } from "@/types/quote";
@@ -11,6 +14,9 @@ import { join } from "node:path";
 import os from "node:os";
 import crypto from "node:crypto";
 import { Resend } from "resend";
+
+
+
 
 // ===== Email config =====
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
@@ -282,6 +288,15 @@ export async function POST(req: Request) {
         html: emailHtml,
         attachments,
       });
+      try {
+        // await resend.emails.send(...)
+        console.log("[quote] email sent");
+      } catch (e) {
+        console.error("[quote] email error", e);
+      }
+      console.log("[env] has DB:", !!process.env.DATABASE_URL, 
+        "has RESEND:", !!process.env.RESEND_API_KEY);
+
     }
 
     return json({ id: qr.id }, 201);

@@ -7,9 +7,11 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL") // ex: file:./prisma/dev.db
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL") 
 }
+
 
 /* =========================
    Enums métier & systèmes
@@ -207,7 +209,7 @@ model StoreItem {
   colorTone          String?        // WHITE / NEUTRAL / WARM / COOL / DARK / CUSTOM (stocké string pour souplesse)
   colorCustom        String?
 
-  // Dimensions (cm)
+  // Dimensions (mm)
   width              Float
   height             Float
   toleranceCm        Float?         // 0..5
