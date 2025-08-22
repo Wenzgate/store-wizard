@@ -6,54 +6,95 @@ export const dynamic = "force-dynamic";
 
 type Params = { id: string };
 
-// --- Labels / helpers ---
-const typeLabel = (v?: string) =>
-  ({ VENETIAN: "Vénitien", ROMAN: "Bateau", ROLLER: "Enrouleur", PLEATED: "Plissé", CASSETTE: "Coffre / Box" } as const)[
-    (v as any) ?? "ROLLER"
-  ] ?? v;
+// Helper générique et typé
+function fromMap<T extends Record<string, string>>(
+  map: T,
+  v?: string,
+  fallbackKey?: keyof T
+): string {
+  if (!v) return fallbackKey ? map[fallbackKey] : "—";
+  return v in map ? map[v as keyof T] : v;
+}
 
-const mountLabel = (v?: string) => ({ INSIDE: "Intérieur", OUTSIDE: "Extérieur", CEILING: "Plafond" } as const)[(v as any)] ?? v;
+// Maps
+const TYPE_MAP = {
+  VENETIAN: "Vénitien",
+  ROMAN: "Bateau",
+  ROLLER: "Enrouleur",
+  PLEATED: "Plissé",
+  CASSETTE: "Coffre / Box",
+} as const;
 
-const windowLabel = (v?: string) =>
-  ({ WINDOW_SINGLE: "Fenêtre", WINDOW_DOOR: "Porte-fenêtre", BAY: "Baie", CORNER: "Angle", SKYLIGHT: "Vélux", OTHER: "Autre" } as const)[
-    (v as any)
-  ] ?? v;
+const MOUNT_MAP = {
+  INSIDE: "Intérieur",
+  OUTSIDE: "Extérieur",
+  CEILING: "Plafond", // si utilisé côté admin
+} as const;
 
-const roomLabel = (v?: string) =>
-  ({ LIVING: "Salon", KITCHEN: "Cuisine", BEDROOM: "Chambre", BATHROOM: "Salle de bain", OFFICE: "Bureau", OTHER: "Autre" } as const)[
-    (v as any)
-  ] ?? v;
+const WINDOW_MAP = {
+  WINDOW_SINGLE: "Fenêtre",
+  WINDOW_DOOR: "Porte-fenêtre",
+  BAY: "Baie",
+  CORNER: "Angle",
+  SKYLIGHT: "Vélux",
+  OTHER: "Autre",
+} as const;
 
-const contactPrefLabel = (v?: string) => ({ EMAIL: "Email", PHONE: "Téléphone", WHATSAPP: "WhatsApp" } as const)[(v as any)] ?? v;
+const ROOM_MAP = {
+  LIVING: "Salon",
+  KITCHEN: "Cuisine",
+  BEDROOM: "Chambre",
+  BATHROOM: "Salle de bain",
+  OFFICE: "Bureau",
+  OTHER: "Autre",
+} as const;
 
-const controlLabel = (it: any) => {
+const CONTACT_MAP = {
+  EMAIL: "Email",
+  PHONE: "Téléphone",
+  WHATSAPP: "WhatsApp",
+} as const;
+
+const FILE_MIME_MAP = {
+  image_jpeg: "image/jpeg",
+  image_png: "image/png",
+  image_webp: "image/webp",
+  application_pdf: "application/pdf",
+} as const;
+
+// Labels
+const typeLabel = (v?: string) => fromMap(TYPE_MAP, v, "ROLLER");
+const mountLabel = (v?: string) => fromMap(MOUNT_MAP, v);
+const windowLabel = (v?: string) => fromMap(WINDOW_MAP, v);
+const roomLabel = (v?: string) => fromMap(ROOM_MAP, v);
+const contactPrefLabel = (v?: string) => fromMap(CONTACT_MAP, v);
+const fileMimeLabel = (v?: string) => fromMap(FILE_MIME_MAP, v) || (v ?? "—");
+
+// Helper commande (hoisted)
+function controlLabel(it: any) {
   // Champs à plat côté DB: control, controlSide, motorBrand, motorPower, motorNotes
-  if (it?.control === "CHAIN") return `Chaînette${it?.controlSide ? ` (${it.controlSide === "LEFT" ? "gauche" : "droite"})` : ""}`;
-  if (it?.control === "CRANK") return `Manivelle${it?.controlSide ? ` (${it.controlSide === "LEFT" ? "gauche" : "droite"})` : ""}`;
-  if (it?.control === "SPRING") return "Ressort";
+  if (it?.control === "CHAIN") {
+    return `Chaînette${it?.controlSide ? ` (${it.controlSide === "LEFT" ? "gauche" : "droite"})` : ""}`;
+  }
+  if (it?.control === "CRANK") {
+    return `Manivelle${it?.controlSide ? ` (${it.controlSide === "LEFT" ? "gauche" : "droite"})` : ""}`;
+  }
+  if (it?.control === "SPRING") {
+    return "Ressort";
+  }
   if (it?.control === "MOTOR") {
     const power =
-      it?.motorPower === "WIRED"
-        ? "— filaire"
-        : it?.motorPower === "BATTERY"
-        ? "— batterie"
-        : it?.motorPower === "SOLAR"
-        ? "— solaire"
-        : "";
+      it?.motorPower === "WIRED" ? "— filaire"
+      : it?.motorPower === "BATTERY" ? "— batterie"
+      : it?.motorPower === "SOLAR" ? "— solaire"
+      : "";
     const brand = it?.motorBrand ? ` (${it.motorBrand})` : "";
     const notes = it?.motorNotes ? ` — ${it.motorNotes}` : "";
     return `Motorisation ${power}${brand}${notes}`.trim();
   }
   return it?.control ?? "—";
-};
+}
 
-const fileMimeLabel = (m?: string) =>
-  ({
-    image_jpeg: "image/jpeg",
-    image_png: "image/png",
-    image_webp: "image/webp",
-    application_pdf: "application/pdf",
-  } as const)[(m as any)] ?? (m ?? "—");
 
 // --- Data loader (relations existantes confirmées) ---
 async function load(id: string) {

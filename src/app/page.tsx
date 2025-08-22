@@ -2,6 +2,7 @@
 "use client";
 import { useSearchParams } from "next/navigation";
 import { Controller } from "react-hook-form"; // ajoute cet import en haut
+import { Suspense } from "react";
 
 import { z } from "zod";
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
@@ -108,7 +109,8 @@ function cn(...a: Array<string | false | null | undefined>) {
 
 // ---------- Page ----------
 
-export default function DevisPage() {
+function DevisPageInner() {
+
   const [currentIdx, setCurrentIdx] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -1352,4 +1354,13 @@ function useFormContextStrict() {
     throw new Error("useFormContextStrict must be used within a <FormProvider>.");
   }
   return ctx;
+}
+
+// -- Wrapper avec Suspense pour satisfaire Next 15 --
+export default function DevisPage() {
+  return (
+    <Suspense fallback={null}>
+      <DevisPageInner />
+    </Suspense>
+  );
 }

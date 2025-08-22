@@ -14,7 +14,8 @@ export async function GET(req: Request) {
     include: { items: true, files: true },
   });
 
-  const data = rows.map((r) => ({
+  // 👉 annotation sur r
+  const data = rows.map((r: any) => ({
     id: r.id,
     name: r.name,
     phone: r.phone,
