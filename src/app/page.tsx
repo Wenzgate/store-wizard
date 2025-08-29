@@ -512,6 +512,24 @@ const isDebug = sp?.get("debug") === "1";
   
       // --- B. Validation stricte Zod
       const parsed = QuoteRequestSchema.safeParse(dataForServer);
+
+      if (!parsed.success) {
+        console.error(parsed.error.flatten());
+        const issue = parsed.error.issues[0];
+        const rootPath = issue?.path?.[0];
+        const step: StepId =
+          rootPath === "customer" ||
+          rootPath === "project" ||
+          rootPath === "consentRgpd"
+            ? "contact"
+            : rootPath === "files"
+            ? "recap"
+            : "items";
+        setSubmitError(issue?.message || "Certaines informations sont manquantes ou invalides.");
+        setIsSubmitting(false);
+        jumpTo(step);
+        return;
+
         if (!parsed.success) {
           console.error(parsed.error.flatten());
           setSubmitError("Certaines informations sont manquantes ou invalides. Vérifiez le formulaire.");
@@ -519,6 +537,7 @@ const isDebug = sp?.get("debug") === "1";
           jumpTo("items");
           return;
         }
+
 
       devLog("data.files", (data as any).files);
       devLog("item.files", (data.items ?? []).map((it) => it.files));
