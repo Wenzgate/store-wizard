@@ -281,21 +281,22 @@ export async function POST(req: Request) {
 
     // Envoi email
     if (resend) {
-      await resend.emails.send({
-        from: SENDER_EMAIL,
-        to: [RECEIVER_EMAIL],
-        subject: `Nouvelle demande #${qr.id.slice(0, 8)}`,
-        html: emailHtml,
-        attachments,
-      });
       try {
-        // await resend.emails.send(...)
+        await resend.emails.send({
+          from: SENDER_EMAIL,
+          to: [RECEIVER_EMAIL],
+          subject: `Nouvelle demande #${qr.id.slice(0, 8)}`,
+          html: emailHtml,
+          attachments,
+        });
         console.log("[quote] email sent");
       } catch (e) {
         console.error("[quote] email error", e);
       }
-      console.log("[env] has DB:", !!process.env.DATABASE_URL, 
-        "has RESEND:", !!process.env.RESEND_API_KEY);
+      console.log(
+        "[env] has DB:", !!process.env.DATABASE_URL,
+        "has RESEND:", !!process.env.RESEND_API_KEY
+      );
 
     }
 
