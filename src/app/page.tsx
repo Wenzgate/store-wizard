@@ -821,7 +821,10 @@ function StepItems() {
 }
 
 function StepContact() {
-  const { register } = useFormContextStrict();
+  const {
+    register,
+    formState: { errors },
+  } = useFormContextStrict();
 
   return (
     <section className="space-y-4">
@@ -833,50 +836,101 @@ function StepContact() {
           <input
             type="text"
             {...register("customer.firstName" as const, { required: true })}
-            className="w-full rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
+            className={cn(
+              "w-full rounded-xl border bg-transparent px-3 py-2 text-sm",
+              errors.customer?.firstName ? "border-red-500" : "border-border",
+            )}
+            aria-invalid={!!errors.customer?.firstName}
           />
+          {errors.customer?.firstName?.message && (
+            <p className="mt-1 text-sm text-red-500">
+              {errors.customer.firstName.message}
+            </p>
+          )}
         </div>
         <div>
           <label className="mb-1 block text-sm font-medium">Nom*</label>
           <input
             type="text"
             {...register("customer.lastName" as const, { required: true })}
-            className="w-full rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
+            className={cn(
+              "w-full rounded-xl border bg-transparent px-3 py-2 text-sm",
+              errors.customer?.lastName ? "border-red-500" : "border-border",
+            )}
+            aria-invalid={!!errors.customer?.lastName}
           />
+          {errors.customer?.lastName?.message && (
+            <p className="mt-1 text-sm text-red-500">
+              {errors.customer.lastName.message}
+            </p>
+          )}
         </div>
         <div>
           <label className="mb-1 block text-sm font-medium">Email*</label>
           <input
             type="email"
             {...register("customer.email" as const, { required: true })}
-            className="w-full rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
+            className={cn(
+              "w-full rounded-xl border bg-transparent px-3 py-2 text-sm",
+              errors.customer?.email ? "border-red-500" : "border-border",
+            )}
+            aria-invalid={!!errors.customer?.email}
           />
+          {errors.customer?.email?.message && (
+            <p className="mt-1 text-sm text-red-500">
+              {errors.customer.email.message}
+            </p>
+          )}
         </div>
         <div>
-          <label className="mb-1 block text-sm font-medium">Téléphone (optionnel)</label>
+          <label className="mb-1 block text-sm font-medium">
+            Téléphone (optionnel)
+          </label>
           <input
             type="tel"
             {...register("customer.phone" as const)}
-            className="w-full rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
+            className={cn(
+              "w-full rounded-xl border bg-transparent px-3 py-2 text-sm",
+              errors.customer?.phone ? "border-red-500" : "border-border",
+            )}
             placeholder="+32…"
+            aria-invalid={!!errors.customer?.phone}
           />
+          {errors.customer?.phone?.message && (
+            <p className="mt-1 text-sm text-red-500">
+              {errors.customer.phone.message}
+            </p>
+          )}
         </div>
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div>
-          <label className="mb-1 block text-sm font-medium">Préférence de contact*</label>
+          <label className="mb-1 block text-sm font-medium">
+            Préférence de contact*
+          </label>
           <select
             {...register("customer.contactPref" as const)}
-            className="w-full rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
+            className={cn(
+              "w-full rounded-xl border bg-transparent px-3 py-2 text-sm",
+              errors.customer?.contactPref ? "border-red-500" : "border-border",
+            )}
+            aria-invalid={!!errors.customer?.contactPref}
           >
             <option value="">—</option>
             {ContactPreferenceEnum.options.map((v) => (
               <option key={String(v)} value={String(v)}>
-                {contactPrefLabel(v as (typeof ContactPreferenceEnum)["options"][number])}
+                {contactPrefLabel(
+                  v as (typeof ContactPreferenceEnum)["options"][number],
+                )}
               </option>
             ))}
           </select>
+          {errors.customer?.contactPref?.message && (
+            <p className="mt-1 text-sm text-red-500">
+              {errors.customer.contactPref.message}
+            </p>
+          )}
         </div>
 
         <div>
@@ -884,44 +938,95 @@ function StepContact() {
           <input
             type="text"
             {...register("project.address.city" as const)}
-            className="w-full rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
+            className={cn(
+              "w-full rounded-xl border bg-transparent px-3 py-2 text-sm",
+              errors.project?.address?.city ? "border-red-500" : "border-border",
+            )}
+            aria-invalid={!!errors.project?.address?.city}
           />
+          {errors.project?.address?.city?.message && (
+            <p className="mt-1 text-sm text-red-500">
+              {errors.project.address.city.message}
+            </p>
+          )}
         </div>
         <div>
           <label className="mb-1 block text-sm font-medium">Code postal*</label>
           <input
             type="text"
             {...register("project.address.postalCode" as const)}
-            className="w-full rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
+            className={cn(
+              "w-full rounded-xl border bg-transparent px-3 py-2 text-sm",
+              errors.project?.address?.postalCode ? "border-red-500" : "border-border",
+            )}
+            aria-invalid={!!errors.project?.address?.postalCode}
           />
+          {errors.project?.address?.postalCode?.message && (
+            <p className="mt-1 text-sm text-red-500">
+              {errors.project.address.postalCode.message}
+            </p>
+          )}
         </div>
         <div>
           <label className="mb-1 block text-sm font-medium">Rue*</label>
           <input
             type="text"
             {...register("project.address.street" as const)}
-            className="w-full rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
+            className={cn(
+              "w-full rounded-xl border bg-transparent px-3 py-2 text-sm",
+              errors.project?.address?.street ? "border-red-500" : "border-border",
+            )}
+            aria-invalid={!!errors.project?.address?.street}
           />
+          {errors.project?.address?.street?.message && (
+            <p className="mt-1 text-sm text-red-500">
+              {errors.project.address.street.message}
+            </p>
+          )}
         </div>
       </div>
 
       <div className="mt-2 space-y-2">
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            {...register("consentRgpd" as const, { required: true })}
-            className="h-4 w-4 rounded border-border"
-          />
-          J’accepte que mes données soient utilisées pour me recontacter dans le cadre de cette demande.
-        </label>
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            {...register("acceptEstimateOnly" as const)}
-            className="h-4 w-4 rounded border-border"
-          />
-          Je comprends qu’il s’agit d’une estimation indicative, sans valeur contractuelle.
-        </label>
+        <div>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              {...register("consentRgpd" as const, { required: true })}
+              className={cn(
+                "h-4 w-4 rounded border",
+                errors.consentRgpd ? "border-red-500" : "border-border",
+              )}
+              aria-invalid={!!errors.consentRgpd}
+            />
+            J’accepte que mes données soient utilisées pour me recontacter dans le
+            cadre de cette demande.
+          </label>
+          {errors.consentRgpd?.message && (
+            <p className="mt-1 text-sm text-red-500">
+              {errors.consentRgpd.message}
+            </p>
+          )}
+        </div>
+        <div>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              {...register("acceptEstimateOnly" as const)}
+              className={cn(
+                "h-4 w-4 rounded border",
+                errors.acceptEstimateOnly ? "border-red-500" : "border-border",
+              )}
+              aria-invalid={!!errors.acceptEstimateOnly}
+            />
+            Je comprends qu’il s’agit d’une estimation indicative, sans valeur
+            contractuelle.
+          </label>
+          {errors.acceptEstimateOnly?.message && (
+            <p className="mt-1 text-sm text-red-500">
+              {errors.acceptEstimateOnly.message}
+            </p>
+          )}
+        </div>
         {/* Honeypot */}
         <input
           type="text"
