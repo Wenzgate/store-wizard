@@ -5,11 +5,11 @@ import { requireAdmin } from "@/lib/adminAuth";
 
 export async function GET(
   req: Request,
-  { params }: { params: Promise<{ id: string }> } // ⬅️ note la Promise ici
+  ctx: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params; // ⬅️ on résout la Promise
+  const { id } = await ctx.params;
 
-  const auth = requireAdmin(req); // si requireAdmin est async => await requireAdmin(req)
+  const auth = requireAdmin(req);
   if (!auth.ok) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
