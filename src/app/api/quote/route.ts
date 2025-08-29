@@ -18,6 +18,18 @@ import { Resend } from "resend";
 
 
 
+const devLog = (...args: any[]) => {
+  if (process.env.NODE_ENV === "development") {
+    console.log(...args);
+  }
+};
+
+const devWarn = (...args: any[]) => {
+  if (process.env.NODE_ENV === "development") {
+    console.warn(...args);
+  }
+};
+
 // ===== Email config =====
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 const RECEIVER_EMAIL = process.env.QUOTE_RECEIVER_EMAIL || process.env.ADMIN_EMAIL || "anderlechtdecor@hotmail.com";
@@ -115,7 +127,7 @@ export async function POST(req: Request) {
   });
 
   // Log rapide
-  console.log("[api/quote] Files =>", {
+  devLog("[api/quote] Files =>", {
     root: rootFiles.map((f) => f.name),
     perItem: itemFiles.map((arr, i) => ({ i, names: arr.map((f) => f.name) })),
   });
@@ -276,7 +288,7 @@ export async function POST(req: Request) {
       await writeFile(tmpFile, pdf);
       // attachments.push({ filename: `devis-${qr.id}.pdf`, content: pdf.toString("base64") });
     } catch (e) {
-      console.warn("[api/quote] PDF non généré:", (e as any)?.message);
+      devWarn("[api/quote] PDF non généré:", (e as any)?.message);
     }
 
     // Envoi email
@@ -289,11 +301,11 @@ export async function POST(req: Request) {
           html: emailHtml,
           attachments,
         });
-        console.log("[quote] email sent");
+        devLog("[quote] email sent");
       } catch (e) {
         console.error("[quote] email error", e);
       }
-      console.log(
+      devLog(
         "[env] has DB:", !!process.env.DATABASE_URL,
         "has RESEND:", !!process.env.RESEND_API_KEY
       );
