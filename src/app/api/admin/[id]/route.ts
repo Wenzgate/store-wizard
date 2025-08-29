@@ -5,9 +5,9 @@ import { requireAdmin } from "@/lib/adminAuth";
 
 export async function GET(
   req: Request,
-  ctx: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await ctx.params;
+  const { id } = await params;
 
   const auth = requireAdmin(req);
   if (!auth.ok) {

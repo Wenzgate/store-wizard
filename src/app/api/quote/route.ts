@@ -153,12 +153,16 @@ export async function POST(req: Request) {
         <img src="https://picsum.photos/seed/anderlechtdecor/600/400" alt="test"/>
       </div>`;
     if (resend) {
-      await resend.emails.send({
-        from: SENDER_EMAIL,
-        to: [RECEIVER_EMAIL],
-        subject: "🧪 Test Images Email (imgdebug)",
-        html,
-      });
+      try {
+        await resend.emails.send({
+          from: SENDER_EMAIL,
+          to: [RECEIVER_EMAIL],
+          subject: "🧪 Test Images Email (imgdebug)",
+          html,
+        });
+      } catch (e) {
+        console.error("[api/quote] imgdebug email error", e);
+      }
     }
     return json({ ok: true, note: "Email test images envoyé" });
   }

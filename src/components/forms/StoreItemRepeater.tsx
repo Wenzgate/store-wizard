@@ -73,6 +73,7 @@ function ItemCard({ index, onRemove }: { index: number; onRemove: () => void }) 
           <select
             {...register(`items.${index}.type` as const)}
             className={`w-full rounded-xl border bg-transparent px-3 py-2 text-sm ${itemErrors?.type ? "border-red-500" : "border-border"}`}
+            aria-invalid={!!itemErrors?.type}
           >
             <option value="ROLLER">Enrouleur</option>
             <option value="VENETIAN">Vénitien</option>
@@ -95,6 +96,7 @@ function ItemCard({ index, onRemove }: { index: number; onRemove: () => void }) 
             min={1}
             {...register(`items.${index}.quantity` as const, { valueAsNumber: true })}
             className={`w-full rounded-xl border bg-transparent px-3 py-2 text-sm ${itemErrors?.quantity ? "border-red-500" : "border-border"}`}
+            aria-invalid={!!itemErrors?.quantity}
           />
           {itemErrors?.quantity?.message && (
             <p className="mt-1 text-xs text-red-500">
@@ -109,6 +111,7 @@ function ItemCard({ index, onRemove }: { index: number; onRemove: () => void }) 
           <select
             {...register(`items.${index}.mount` as const)}
             className={`w-full rounded-xl border bg-transparent px-3 py-2 text-sm ${itemErrors?.mount ? "border-red-500" : "border-border"}`}
+            aria-invalid={!!itemErrors?.mount}
           >
             <option value="INSIDE">Intérieur</option>
             <option value="OUTSIDE">Extérieur</option>
@@ -126,6 +129,7 @@ function ItemCard({ index, onRemove }: { index: number; onRemove: () => void }) 
           <select
             {...register(`items.${index}.windowType` as const)}
             className={`w-full rounded-xl border bg-transparent px-3 py-2 text-sm ${itemErrors?.windowType ? "border-red-500" : "border-border"}`}
+            aria-invalid={!!itemErrors?.windowType}
           >
             <option value="">—</option>
             <option value="WINDOW_SINGLE">Fenêtre</option>
@@ -148,6 +152,7 @@ function ItemCard({ index, onRemove }: { index: number; onRemove: () => void }) 
           <select
             {...register(`items.${index}.room` as const)}
             className={`w-full rounded-xl border bg-transparent px-3 py-2 text-sm ${itemErrors?.room ? "border-red-500" : "border-border"}`}
+            aria-invalid={!!itemErrors?.room}
           >
             <option value="">—</option>
             <option value="LIVING">Salon</option>
@@ -172,6 +177,7 @@ function ItemCard({ index, onRemove }: { index: number; onRemove: () => void }) 
               type="text"
               {...register(`items.${index}.roomLabel` as const)}
               className={`w-full rounded-xl border bg-transparent px-3 py-2 text-sm ${itemErrors?.roomLabel ? "border-red-500" : "border-border"}`}
+              aria-invalid={!!itemErrors?.roomLabel}
             />
             {itemErrors?.roomLabel?.message && (
               <p className="mt-1 text-xs text-red-500">
@@ -187,6 +193,7 @@ function ItemCard({ index, onRemove }: { index: number; onRemove: () => void }) 
           <select
             {...register(`items.${index}.control` as const)}
             className={`w-full rounded-xl border bg-transparent px-3 py-2 text-sm ${itemErrors?.control ? "border-red-500" : "border-border"}`}
+            aria-invalid={!!itemErrors?.control}
             onChange={(e) => {
               if (e.target.value !== "MOTOR") {
                 // on vide le bloc motor si on n'est plus en motorisation
@@ -212,6 +219,7 @@ function ItemCard({ index, onRemove }: { index: number; onRemove: () => void }) 
               <select
                 {...register(`items.${index}.motor.power` as const)}
                 className={`w-full rounded-xl border bg-transparent px-3 py-2 text-sm ${itemErrors?.motor?.power ? "border-red-500" : "border-border"}`}
+                aria-invalid={!!itemErrors?.motor?.power}
               >
                 <option value="">—</option>
                 <option value="WIRED">Filaire</option>
@@ -230,6 +238,7 @@ function ItemCard({ index, onRemove }: { index: number; onRemove: () => void }) 
                 type="text"
                 {...register(`items.${index}.motor.brand` as const)}
                 className={`w-full rounded-xl border bg-transparent px-3 py-2 text-sm ${itemErrors?.motor?.brand ? "border-red-500" : "border-border"}`}
+                aria-invalid={!!itemErrors?.motor?.brand}
               />
               {itemErrors?.motor?.brand?.message && (
                 <p className="mt-1 text-xs text-red-500">
@@ -249,6 +258,7 @@ function ItemCard({ index, onRemove }: { index: number; onRemove: () => void }) 
             max={5000}
             {...register(`items.${index}.dims.width` as const, { valueAsNumber: true })}
             className={`w-full rounded-xl border bg-transparent px-3 py-2 text-sm ${itemErrors?.dims?.width ? "border-red-500" : "border-border"}`}
+            aria-invalid={!!itemErrors?.dims?.width}
           />
           {itemErrors?.dims?.width?.message && (
             <p className="mt-1 text-xs text-red-500">
@@ -264,6 +274,7 @@ function ItemCard({ index, onRemove }: { index: number; onRemove: () => void }) 
             max={5000}
             {...register(`items.${index}.dims.height` as const, { valueAsNumber: true })}
             className={`w-full rounded-xl border bg-transparent px-3 py-2 text-sm ${itemErrors?.dims?.height ? "border-red-500" : "border-border"}`}
+            aria-invalid={!!itemErrors?.dims?.height}
           />
           {itemErrors?.dims?.height?.message && (
             <p className="mt-1 text-xs text-red-500">
@@ -280,6 +291,7 @@ function ItemCard({ index, onRemove }: { index: number; onRemove: () => void }) 
           {...register(`items.${index}.notes` as const)}
           className={`w-full rounded-xl border bg-transparent px-3 py-2 text-sm ${itemErrors?.notes ? "border-red-500" : "border-border"}`}
           rows={3}
+          aria-invalid={!!itemErrors?.notes}
         />
         {itemErrors?.notes?.message && (
           <p className="mt-1 text-xs text-red-500">
