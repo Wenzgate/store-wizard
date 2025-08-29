@@ -41,9 +41,15 @@ export default function StoreItemRepeater() {
 }
 
 function ItemCard({ index, onRemove }: { index: number; onRemove: () => void }) {
-  const { register, watch, setValue } = useFormContext<FormValues>();
+  const {
+    register,
+    watch,
+    setValue,
+    formState: { errors },
+  } = useFormContext<FormValues>();
   const ctrl = watch(`items.${index}.control`);
   const room = watch(`items.${index}.room`);
+  const itemErrors = errors.items?.[index];
 
   return (
     <article className="rounded-2xl border border-border p-4">
@@ -66,7 +72,7 @@ function ItemCard({ index, onRemove }: { index: number; onRemove: () => void }) 
           <label className="mb-1 block text-sm font-medium">Type*</label>
           <select
             {...register(`items.${index}.type` as const)}
-            className="w-full rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
+            className={`w-full rounded-xl border bg-transparent px-3 py-2 text-sm ${itemErrors?.type ? "border-red-500" : "border-border"}`}
           >
             <option value="ROLLER">Enrouleur</option>
             <option value="VENETIAN">Vénitien</option>
@@ -74,6 +80,11 @@ function ItemCard({ index, onRemove }: { index: number; onRemove: () => void }) 
             <option value="PLEATED">Plissé</option>
             <option value="CASSETTE">Coffre / Box</option>
           </select>
+          {itemErrors?.type?.message && (
+            <p className="mt-1 text-xs text-red-500">
+              {itemErrors.type.message as string}
+            </p>
+          )}
         </div>
 
         {/* Quantité */}
@@ -83,8 +94,13 @@ function ItemCard({ index, onRemove }: { index: number; onRemove: () => void }) 
             type="number"
             min={1}
             {...register(`items.${index}.quantity` as const, { valueAsNumber: true })}
-            className="w-full rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
+            className={`w-full rounded-xl border bg-transparent px-3 py-2 text-sm ${itemErrors?.quantity ? "border-red-500" : "border-border"}`}
           />
+          {itemErrors?.quantity?.message && (
+            <p className="mt-1 text-xs text-red-500">
+              {itemErrors.quantity.message as string}
+            </p>
+          )}
         </div>
 
         {/* Pose */}
@@ -92,11 +108,16 @@ function ItemCard({ index, onRemove }: { index: number; onRemove: () => void }) 
           <label className="mb-1 block text-sm font-medium">Pose*</label>
           <select
             {...register(`items.${index}.mount` as const)}
-            className="w-full rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
+            className={`w-full rounded-xl border bg-transparent px-3 py-2 text-sm ${itemErrors?.mount ? "border-red-500" : "border-border"}`}
           >
             <option value="INSIDE">Intérieur</option>
             <option value="OUTSIDE">Extérieur</option>
           </select>
+          {itemErrors?.mount?.message && (
+            <p className="mt-1 text-xs text-red-500">
+              {itemErrors.mount.message as string}
+            </p>
+          )}
         </div>
 
         {/* Ouverture */}
@@ -104,7 +125,7 @@ function ItemCard({ index, onRemove }: { index: number; onRemove: () => void }) 
           <label className="mb-1 block text-sm font-medium">Type d’ouverture*</label>
           <select
             {...register(`items.${index}.windowType` as const)}
-            className="w-full rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
+            className={`w-full rounded-xl border bg-transparent px-3 py-2 text-sm ${itemErrors?.windowType ? "border-red-500" : "border-border"}`}
           >
             <option value="">—</option>
             <option value="WINDOW_SINGLE">Fenêtre</option>
@@ -114,6 +135,11 @@ function ItemCard({ index, onRemove }: { index: number; onRemove: () => void }) 
             <option value="SKYLIGHT">Vélux</option>
             <option value="OTHER">Autre</option>
           </select>
+          {itemErrors?.windowType?.message && (
+            <p className="mt-1 text-xs text-red-500">
+              {itemErrors.windowType.message as string}
+            </p>
+          )}
         </div>
 
         {/* Pièce */}
@@ -121,7 +147,7 @@ function ItemCard({ index, onRemove }: { index: number; onRemove: () => void }) 
           <label className="mb-1 block text-sm font-medium">Pièce*</label>
           <select
             {...register(`items.${index}.room` as const)}
-            className="w-full rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
+            className={`w-full rounded-xl border bg-transparent px-3 py-2 text-sm ${itemErrors?.room ? "border-red-500" : "border-border"}`}
           >
             <option value="">—</option>
             <option value="LIVING">Salon</option>
@@ -131,6 +157,11 @@ function ItemCard({ index, onRemove }: { index: number; onRemove: () => void }) 
             <option value="OFFICE">Bureau</option>
             <option value="OTHER">Autre</option>
           </select>
+          {itemErrors?.room?.message && (
+            <p className="mt-1 text-xs text-red-500">
+              {itemErrors.room.message as string}
+            </p>
+          )}
         </div>
 
         {/* Label Pièce si OTHER */}
@@ -140,8 +171,13 @@ function ItemCard({ index, onRemove }: { index: number; onRemove: () => void }) 
             <input
               type="text"
               {...register(`items.${index}.roomLabel` as const)}
-              className="w-full rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
+              className={`w-full rounded-xl border bg-transparent px-3 py-2 text-sm ${itemErrors?.roomLabel ? "border-red-500" : "border-border"}`}
             />
+            {itemErrors?.roomLabel?.message && (
+              <p className="mt-1 text-xs text-red-500">
+                {itemErrors.roomLabel.message as string}
+              </p>
+            )}
           </div>
         )}
 
@@ -150,7 +186,7 @@ function ItemCard({ index, onRemove }: { index: number; onRemove: () => void }) 
           <label className="mb-1 block text-sm font-medium">Commande*</label>
           <select
             {...register(`items.${index}.control` as const)}
-            className="w-full rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
+            className={`w-full rounded-xl border bg-transparent px-3 py-2 text-sm ${itemErrors?.control ? "border-red-500" : "border-border"}`}
             onChange={(e) => {
               if (e.target.value !== "MOTOR") {
                 // on vide le bloc motor si on n'est plus en motorisation
@@ -161,6 +197,11 @@ function ItemCard({ index, onRemove }: { index: number; onRemove: () => void }) 
             <option value="CHAIN">Chaînette</option>
             <option value="MOTOR">Motorisation</option>
           </select>
+          {itemErrors?.control?.message && (
+            <p className="mt-1 text-xs text-red-500">
+              {itemErrors.control.message as string}
+            </p>
+          )}
         </div>
 
         {/* Motorisation (si MOTEUR) */}
@@ -170,21 +211,31 @@ function ItemCard({ index, onRemove }: { index: number; onRemove: () => void }) 
               <label className="mb-1 block text-sm font-medium">Alimentation moteur</label>
               <select
                 {...register(`items.${index}.motor.power` as const)}
-                className="w-full rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
+                className={`w-full rounded-xl border bg-transparent px-3 py-2 text-sm ${itemErrors?.motor?.power ? "border-red-500" : "border-border"}`}
               >
                 <option value="">—</option>
                 <option value="WIRED">Filaire</option>
                 <option value="BATTERY">Batterie</option>
                 <option value="SOLAR">Solaire</option>
               </select>
+              {itemErrors?.motor?.power?.message && (
+                <p className="mt-1 text-xs text-red-500">
+                  {itemErrors.motor.power.message as string}
+                </p>
+              )}
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium">Marque (optionnel)</label>
               <input
                 type="text"
                 {...register(`items.${index}.motor.brand` as const)}
-                className="w-full rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
+                className={`w-full rounded-xl border bg-transparent px-3 py-2 text-sm ${itemErrors?.motor?.brand ? "border-red-500" : "border-border"}`}
               />
+              {itemErrors?.motor?.brand?.message && (
+                <p className="mt-1 text-xs text-red-500">
+                  {itemErrors.motor.brand.message as string}
+                </p>
+              )}
             </div>
           </>
         )}
@@ -197,8 +248,13 @@ function ItemCard({ index, onRemove }: { index: number; onRemove: () => void }) 
             min={200}
             max={5000}
             {...register(`items.${index}.dims.width` as const, { valueAsNumber: true })}
-            className="w-full rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
+            className={`w-full rounded-xl border bg-transparent px-3 py-2 text-sm ${itemErrors?.dims?.width ? "border-red-500" : "border-border"}`}
           />
+          {itemErrors?.dims?.width?.message && (
+            <p className="mt-1 text-xs text-red-500">
+              {itemErrors.dims.width.message as string}
+            </p>
+          )}
         </div>
         <div>
           <label className="mb-1 block text-sm font-medium">Hauteur (mm)*</label>
@@ -207,8 +263,13 @@ function ItemCard({ index, onRemove }: { index: number; onRemove: () => void }) 
             min={200}
             max={5000}
             {...register(`items.${index}.dims.height` as const, { valueAsNumber: true })}
-            className="w-full rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
+            className={`w-full rounded-xl border bg-transparent px-3 py-2 text-sm ${itemErrors?.dims?.height ? "border-red-500" : "border-border"}`}
           />
+          {itemErrors?.dims?.height?.message && (
+            <p className="mt-1 text-xs text-red-500">
+              {itemErrors.dims.height.message as string}
+            </p>
+          )}
         </div>
       </div>
 
@@ -217,9 +278,14 @@ function ItemCard({ index, onRemove }: { index: number; onRemove: () => void }) 
         <label className="mb-1 block text-sm font-medium">Notes (optionnel)</label>
         <textarea
           {...register(`items.${index}.notes` as const)}
-          className="w-full rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
+          className={`w-full rounded-xl border bg-transparent px-3 py-2 text-sm ${itemErrors?.notes ? "border-red-500" : "border-border"}`}
           rows={3}
         />
+        {itemErrors?.notes?.message && (
+          <p className="mt-1 text-xs text-red-500">
+            {itemErrors.notes.message as string}
+          </p>
+        )}
       </div>
     </article>
   );
