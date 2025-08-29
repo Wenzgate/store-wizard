@@ -6,7 +6,14 @@ import { Suspense } from "react";
 
 import { z } from "zod";
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import { FormProvider, useForm, useFormContext as useRHFContext, type FieldPath } from "react-hook-form";
+import {
+  FormProvider,
+  useForm,
+  useFormContext as useRHFContext,
+  type FieldPath,
+  type FieldErrors,
+  type SubmitHandler,
+} from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { motion, AnimatePresence } from "framer-motion";
 import FileDrop from "@/components/forms/FileDrop";
@@ -92,7 +99,7 @@ function ensureItemsCount(items: StoreItem[], count: number): StoreItem[] {
       quantity: 1,
       mount: "INSIDE",
       control: "CHAIN",
-      dims: { width: 1000, height: 1000 },
+      dims: { width: MIN_DIM_MM, height: MIN_DIM_MM },
       notes: "",
     } as StoreItem);
   }
@@ -123,12 +130,7 @@ function DevisPageInner() {
   const sp = useSearchParams();
 const isDebug = sp?.get("debug") === "1";
 
-  const submitIntentRef = useRef(false);
   const transitionGuardUntilRef = useRef(0);
-  
-  const markSubmitIntent = useCallback(() => {
-    submitIntentRef.current = true;
-  }, []);
   
   const currentStep = STEPS[currentIdx];
 
@@ -155,11 +157,12 @@ const isDebug = sp?.get("debug") === "1";
           country: "Belgique",
         },
         // timing/budget existent encore dans le schéma mais ne sont plus collectés
-        
+
         notes: "",
       },
 
       acceptEstimateOnly: true,
+      consentRgpd: false as any,
       honeypot: "",
       source: "WEBSITE" as any,
       locale: "fr",
@@ -167,6 +170,24 @@ const isDebug = sp?.get("debug") === "1";
   });
 
   const { handleSubmit, watch, setValue, getValues, trigger, reset, formState } = form;
+
+  const fieldsByStep: Record<StepId, FieldPath<QuoteFormValues>[]> = {
+    intro: [],
+    quantity: ["items"],
+    items: ["items"],
+    contact: [
+      "customer.firstName",
+      "customer.lastName",
+      "customer.email",
+      "customer.contactPref",
+      "project.address.city",
+      "project.address.postalCode",
+      "project.address.street",
+      "consentRgpd",
+    ],
+    recap: [],
+    done: [],
+  };
 
   // ---- Draft: load on mount, then autosave
   const didHydrateRef = useRef(false);
@@ -195,13 +216,16 @@ const isDebug = sp?.get("debug") === "1";
   }, [watch, currentIdx]);
 
   // ---- Handlers
-   const goNext = async (e?: React.MouseEvent) => {
-       e?.preventDefault();
-       e?.stopPropagation();
-    const ok = await validateStep(currentStep.id);
-    if (!ok) return;
-       // Anti "ghost-click" : ignore tout submit pendant 400ms après le changement d'étape
-   transitionGuardUntilRef.current = Date.now() + 400;
+  const goNext = async (e?: React.MouseEvent) => {
+    e?.preventDefault();
+    e?.stopPropagation();
+    const fields = fieldsByStep[currentStep.id];
+    if (fields.length) {
+      const ok = await trigger(fields);
+      if (!ok) return;
+    }
+    // Anti "ghost-click" : ignore tout submit pendant 400ms après le changement d'étape
+    transitionGuardUntilRef.current = Date.now() + 400;
     setCurrentIdx((i) => Math.min(i + 1, STEPS.length - 1));
     track("step_next", { step: currentStep.id });
   };
@@ -230,29 +254,6 @@ const isDebug = sp?.get("debug") === "1";
     },
     [getValues, setValue]
   );
-
-  // ---- Step validations (subset of schema)
-  async function validateStep(stepId: StepId): Promise<boolean> {
-    const fieldsByStep: Record<StepId, FieldPath<QuoteFormValues>[]> = {
-      intro: [],
-      quantity: ["items"],
-      items: ["items"],
-      contact: [
-        "customer.firstName",
-        "customer.lastName",
-        "customer.email",
-        "consentRgpd",
-      ],
-      recap: [],
-      done: [],
-    };
-
-    const fields = fieldsByStep[stepId];
-    if (!fields.length) return true;
-
-    const isValid = await trigger(fields);
-    return isValid;
-  }
 
   // ---- Final submit
 
@@ -375,13 +376,6 @@ const isDebug = sp?.get("debug") === "1";
     sha256?: string;      // optionnel si ton /api/upload le renvoie
   };
   
-  // Util pour générer un id court
-  function uid() {
-    return typeof crypto !== "undefined" && "randomUUID" in crypto
-      ? crypto.randomUUID()
-      : Math.random().toString(36).slice(2);
-  }
-  
   // ---- Helper: upload d’un lot de fichiers via FormData
   async function uploadFilesBatch(files: File[], extra?: Record<string, string>): Promise<UploadedFileRef[]> {
     if (!files?.length) return [];
@@ -492,13 +486,10 @@ const isDebug = sp?.get("debug") === "1";
   //     setIsSubmitting(false);
   //   }
   // };
-  const onSubmit = async (data: QuoteFormValues) => {
+  const onSubmit: SubmitHandler<QuoteFormValues> = async (data) => {
     // 1) Anti "ghost submit" après changement d’étape
     if (Date.now() < transitionGuardUntilRef.current) return;
-    // 2) N'autoriser que le clic explicite sur "Envoyer"
-    if (!submitIntentRef.current) return;
-    submitIntentRef.current = false;
-  
+
     setIsSubmitting(true);
     setSubmitError(null);
   
@@ -514,7 +505,6 @@ const isDebug = sp?.get("debug") === "1";
       const parsed = QuoteRequestSchema.safeParse(dataForServer);
 
       if (!parsed.success) {
-        console.error(parsed.error.flatten());
         const issue = parsed.error.issues[0];
         const rootPath = issue?.path?.[0];
         const step: StepId =
@@ -578,6 +568,18 @@ const isDebug = sp?.get("debug") === "1";
       setIsSubmitting(false);
     }
   };
+
+  const onSubmitError = (errors: FieldErrors<QuoteFormValues>) => {
+    const get = (obj: any, path: string) =>
+      path.split(".").reduce((o, key) => (o ? (o as any)[key] : undefined), obj);
+    for (const step of STEPS) {
+      const fields = fieldsByStep[step.id];
+      if (fields.some((f) => get(errors, f))) {
+        jumpTo(step.id);
+        break;
+      }
+    }
+  };
   
 
   async function safeReadError(res: Response) {
@@ -604,7 +606,7 @@ const isDebug = sp?.get("debug") === "1";
     <FormProvider {...form}>
       <form
         className="mx-auto max-w-3xl"
-        onSubmit={handleSubmit(onSubmit)}
+        onSubmit={handleSubmit(onSubmit, onSubmitError)}
         noValidate
         aria-live="polite"
       >
@@ -651,7 +653,6 @@ const isDebug = sp?.get("debug") === "1";
               <button
                 type="submit"
                 disabled={isSubmitting}
-                onClick={markSubmitIntent}
                 className="rounded-xl bg-[hsl(var(--brand))] px-5 py-2 text-sm font-semibold text-[hsl(var(--brand-foreground))] hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[hsl(var(--brand))] disabled:opacity-60"
               >
                 {isSubmitting ? "Envoi…" : "Envoyer la demande"}
