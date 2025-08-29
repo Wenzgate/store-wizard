@@ -6,7 +6,7 @@ import { Suspense } from "react";
 
 import { z } from "zod";
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import { FormProvider, useForm, useFormContext as useRHFContext } from "react-hook-form";
+import { FormProvider, useForm, useFormContext as useRHFContext, type FieldPath } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { motion, AnimatePresence } from "framer-motion";
 import FileDrop from "@/components/forms/FileDrop";
@@ -165,7 +165,7 @@ const isDebug = sp?.get("debug") === "1";
     },
   });
 
-  const { handleSubmit, watch, setValue, getValues, reset, formState } = form;
+  const { handleSubmit, watch, setValue, getValues, trigger, reset, formState } = form;
 
   // ---- Draft: load on mount, then autosave
   const didHydrateRef = useRef(false);
@@ -232,40 +232,25 @@ const isDebug = sp?.get("debug") === "1";
 
   // ---- Step validations (subset of schema)
   async function validateStep(stepId: StepId): Promise<boolean> {
-    const v = getValues();
+    const fieldsByStep: Record<StepId, FieldPath<QuoteFormValues>[]> = {
+      intro: [],
+      quantity: ["items"],
+      items: ["items"],
+      contact: [
+        "customer.firstName",
+        "customer.lastName",
+        "customer.email",
+        "consentRgpd",
+      ],
+      recap: [],
+      done: [],
+    };
 
-    if (stepId === "quantity") {
-      const qty = (v.items?.length ?? 0) || 0;
-      if (qty < 1) {
-        alert("Indiquez au moins 1 store (vous pourrez ajuster ensuite).");
-        return false;
-      }
-      return true;
-    }
+    const fields = fieldsByStep[stepId];
+    if (!fields.length) return true;
 
-    if (stepId === "items") {
-      for (const it of v.items ?? []) {
-        if (!it?.dims) return false;
-        if (it.dims.width < MIN_DIM_MM || it.dims.width > MAX_DIM_MM) return false;
-        if (it.dims.height < MIN_DIM_MM || it.dims.height > MAX_DIM_MM) return false;
-      }
-      return true;
-    }
-
-    if (stepId === "contact") {
-      const c = v.customer as any;
-      if (!c?.firstName || !c?.lastName || !c?.email) {
-        alert("Merci de compléter vos coordonnées (prénom, nom, email).");
-        return false;
-      }
-      if (!v.consentRgpd) {
-        alert("Le consentement RGPD est requis.");
-        return false;
-      }
-      return true;
-    }
-
-    return true;
+    const isValid = await trigger(fields);
+    return isValid;
   }
 
   // ---- Final submit
@@ -330,7 +315,6 @@ const isDebug = sp?.get("debug") === "1";
   //       console.error("[Zod] parse failed (fallback)", parsed.error);
   //     }
   
-  //     alert("Certaines informations sont manquantes ou invalides. Vérifiez le formulaire.");
   //     setIsSubmitting(false);
   //     jumpTo("items");
   //     return;
@@ -479,7 +463,6 @@ const isDebug = sp?.get("debug") === "1";
   //     const parsed = QuoteRequestSchema.safeParse(payload);
   //     if (!parsed.success) {
   //       console.error(parsed.error.flatten());
-  //       alert("Certaines informations sont manquantes ou invalides. Vérifiez le formulaire.");
   //       setIsSubmitting(false);
   //       jumpTo("items");
   //       return;
@@ -528,13 +511,13 @@ const isDebug = sp?.get("debug") === "1";
   
       // --- B. Validation stricte Zod
       const parsed = QuoteRequestSchema.safeParse(dataForServer);
-      if (!parsed.success) {
-        console.error(parsed.error.flatten());
-        alert("Certaines informations sont manquantes ou invalides. Vérifiez le formulaire.");
-        setIsSubmitting(false);
-        jumpTo("items");
-        return;
-      }
+        if (!parsed.success) {
+          console.error(parsed.error.flatten());
+          setSubmitError("Certaines informations sont manquantes ou invalides. Vérifiez le formulaire.");
+          setIsSubmitting(false);
+          jumpTo("items");
+          return;
+        }
 
       devLog("data.files", (data as any).files);
       devLog("item.files", (data.items ?? []).map((it) => it.files));
