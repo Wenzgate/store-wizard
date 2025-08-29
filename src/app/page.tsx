@@ -133,7 +133,8 @@ const isDebug = sp?.get("debug") === "1";
   const currentStep = STEPS[currentIdx];
 
   const form = useForm<QuoteFormValues>({
-    mode: "onSubmit",
+    mode: "onTouched",
+    resolver: zodResolver(QuoteRequestSchema),
     defaultValues: {
       id: undefined,
       createdAt: undefined,
