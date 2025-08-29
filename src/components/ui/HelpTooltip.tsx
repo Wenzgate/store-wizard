@@ -40,7 +40,7 @@ export default function HelpTooltip({
       <button
         ref={btnRef}
         type="button"
-        className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-border text-xs text-muted hover:text-fg hover:border-fg focus:outline-none focus:ring-2 focus:ring-[hsl(var(--brand))]"
+        className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-border text-xs text-muted hover:text-fg hover:border-fg focus:outline-none focus:ring-2 focus:ring-brand"
         aria-describedby={open ? tipId : undefined}
         aria-label={typeof label === "string" ? label : "Aide"}
         onMouseEnter={() => setOpen(true)}

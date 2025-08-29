@@ -58,9 +58,9 @@ export default function Stepper({
       </div>
 
       {showProgressBar && (
-        <div className="relative h-2 w-full overflow-hidden rounded-full bg-border" aria-label={ariaLabel}>
+        <div className="relative h-2 w-full overflow-hidden rounded-full bg-brand-alt" aria-label={ariaLabel}>
           <motion.div
-            className="h-2 rounded-full bg-[hsl(var(--brand))]"
+            className="h-2 rounded-full bg-brand"
             initial={{ width: 0 }}
             animate={{ width: `${pct}%` }}
             transition={{ type: "spring", stiffness: 260, damping: 30 }}
@@ -77,8 +77,8 @@ export default function Stepper({
               <div
                 className={cn(
                   "flex h-7 w-7 items-center justify-center rounded-full border text-xs font-semibold",
-                  isDone && "bg-[hsl(var(--brand))] text-[hsl(var(--brand-foreground))] border-transparent",
-                  isCurrent && !isDone && "border-[hsl(var(--brand))] text-[hsl(var(--brand))]",
+                  isDone && "bg-brand text-brand-foreground border-transparent",
+                  isCurrent && !isDone && "border-brand text-brand",
                   !isCurrent && !isDone && "border-border text-muted"
                 )}
                 aria-current={isCurrent ? "step" : undefined}

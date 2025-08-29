@@ -32,7 +32,7 @@ export default function StoreItemRepeater() {
             notes: "",
           } as any)
         }
-        className="rounded-xl border border-border px-4 py-2 text-sm hover:bg-black/5 dark:hover:bg-white/10"
+        className="rounded-xl border border-brand bg-brand-alt px-4 py-2 text-sm text-brand-foreground hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-brand"
       >
         + Ajouter un store
       </button>
@@ -59,7 +59,7 @@ function ItemCard({ index, onRemove }: { index: number; onRemove: () => void }) 
           <button
             type="button"
             onClick={onRemove}
-            className="rounded-md border border-border px-2 py-1 text-xs hover:bg-black/5 dark:hover:bg-white/10"
+            className="rounded-md border border-brand px-2 py-1 text-xs hover:bg-brand-alt focus:outline-none focus:ring-2 focus:ring-brand"
           >
             Supprimer
           </button>
