@@ -20,7 +20,7 @@ export default function AdminLoginPage() {
 
   return (
     <main className="mx-auto max-w-sm p-6">
-      <h2 className="mb-4 text-lg font-semibold">Connexion admin</h2>
+      <h2 className="mb-4">Connexion admin</h2>
       <form onSubmit={onSubmit} className="space-y-3">
         <input
           type="password"
@@ -29,7 +29,7 @@ export default function AdminLoginPage() {
           placeholder="Admin token"
           className="w-full rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
         />
-        <button className="rounded-xl bg-[hsl(var(--brand))] px-4 py-2 text-sm font-semibold text-[hsl(var(--brand-foreground))]">
+        <button className="rounded-xl bg-brand px-4 py-2 text-sm font-semibold text-brand-foreground">
           Se connecter
         </button>
       </form>

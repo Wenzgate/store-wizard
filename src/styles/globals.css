@@ -1,4 +1,4 @@
-
+@import url('https://fonts.googleapis.com/css2?family=Lora:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
 :root{
   --bg: 0 0% 100%;
@@ -6,6 +6,7 @@
   --muted: 215 16% 47%;
   --border: 214 32% 91%;
   --brand: 220 90% 56%;
+  --brand-alt: 220 90% 65%;
   --brand-foreground: 0 0% 100%;
 }
 :root.dark{
@@ -14,9 +15,19 @@
   --muted: 215 20% 65%;
   --border: 217 33% 17%;
   --brand: 220 90% 56%;
+  --brand-alt: 220 90% 65%;
   --brand-foreground: 0 0% 100%;
 }
 .text-muted{ color: hsl(var(--muted)); }
 .bg-bg{ background-color: hsl(var(--bg)); }
 .text-fg{ color: hsl(var(--fg)); }
 .border-border{ border-color: hsl(var(--border)); }
+
+@layer base {
+  body { font-family: sans-serif; }
+  h1, h2, h3, h4, h5, h6 { font-family: "Lora", serif; }
+  h1 { @apply text-4xl font-bold text-brand; }
+  h2 { @apply text-3xl font-semibold; }
+  p  { @apply leading-relaxed; }
+  a  { @apply text-brand underline hover:text-brand-alt; }
+}

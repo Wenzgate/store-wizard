@@ -610,7 +610,7 @@ const isDebug = sp?.get("debug") === "1";
         noValidate
         aria-live="polite"
       >
-        <h1 className="mb-4 text-2xl font-bold">Devis Stores</h1>
+        <h1 className="mb-4">Devis Stores</h1>
         <Stepper steps={stepperData} current={currentIdx} />
 
         <div className="mt-6">
@@ -642,7 +642,7 @@ const isDebug = sp?.get("debug") === "1";
               onClick={goBack}
               disabled={currentIdx === 0 || isSubmitting}
               className={cn(
-                "rounded-xl border border-border px-4 py-2 text-sm hover:bg-black/5 dark:hover:bg:white/10 focus:outline-none focus:ring-2 focus:ring-[hsl(var(--brand))]",
+                "rounded-xl border border-brand px-4 py-2 text-sm text-brand hover:bg-brand-alt focus:outline-none focus:ring-2 focus:ring-brand",
                 (currentIdx === 0 || isSubmitting) && "opacity-50"
               )}
             >
@@ -653,7 +653,7 @@ const isDebug = sp?.get("debug") === "1";
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="rounded-xl bg-[hsl(var(--brand))] px-5 py-2 text-sm font-semibold text-[hsl(var(--brand-foreground))] hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[hsl(var(--brand))] disabled:opacity-60"
+                className="rounded-xl bg-brand px-5 py-2 text-sm font-semibold text-brand-foreground hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand disabled:opacity-60"
               >
                 {isSubmitting ? "Envoi…" : "Envoyer la demande"}
               </button>
@@ -662,7 +662,7 @@ const isDebug = sp?.get("debug") === "1";
                 type="button"
                 onClick={(e) => goNext(e)}
                 disabled={isSubmitting}
-                className="rounded-xl bg-[hsl(var(--brand))] px-5 py-2 text-sm font-semibold text-[hsl(var(--brand-foreground))] hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[hsl(var(--brand))] disabled:opacity-60"
+                className="rounded-xl bg-brand px-5 py-2 text-sm font-semibold text-brand-foreground hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand disabled:opacity-60"
               >
                 Continuer
               </button>
@@ -703,7 +703,7 @@ function StepIntro({ onStart }: { onStart: () => void }) {
         <button
           type="button"
           onClick={onStart}
-          className="rounded-xl bg-[hsl(var(--brand))] px-5 py-2 text-sm font-semibold text-[hsl(var(--brand-foreground))] hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[hsl(var(--brand))]"
+          className="rounded-xl bg-brand px-5 py-2 text-sm font-semibold text-brand-foreground hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand"
         >
           Commencer
         </button>
@@ -776,7 +776,7 @@ function StepQuantity({ onEnsureItems }: { onEnsureItems: (n: number) => void })
   return (
     <section className="space-y-4">
       <div className="flex items-center gap-2">
-        <h2 className="text-lg font-semibold">Combien de stores ?</h2>
+        <h2>Combien de stores ?</h2>
         <HelpTooltip content="Indiquez un nombre approximatif si nécessaire. Vous pourrez ajuster ensuite." />
       </div>
 
@@ -808,7 +808,7 @@ function StepItems() {
   return (
     <section className="space-y-4">
       <div className="flex items-center gap-2">
-        <h2 className="text-lg font-semibold">Détails des stores</h2>
+        <h2>Détails des stores</h2>
         <HelpTooltip
           content={`Indiquez la mesure en mm !`}
         />
@@ -829,7 +829,7 @@ function StepContact() {
 
   return (
     <section className="space-y-4">
-      <h2 className="text-lg font-semibold">Vos coordonnées</h2>
+      <h2>Vos coordonnées</h2>
       <p className="mt-2 text-xs text-muted">* Champs Obligatoires</p>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div>
@@ -1181,7 +1181,7 @@ function StepRecap({ onEdit }: { onEdit: (id: StepId) => void }) {
   return (
     <section className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Vérification</h2>
+        <h2>Vérification</h2>
       </div>
 
       {/* Coordonnées */}
@@ -1292,7 +1292,7 @@ function StepRecap({ onEdit }: { onEdit: (id: StepId) => void }) {
 function StepDone() {
   return (
     <section className="space-y-3 text-center">
-      <h2 className="text-lg font-semibold">Merci 🙌</h2>
+      <h2>Merci 🙌</h2>
       <p className="text-sm text-muted">
         Votre demande a été envoyée. Nous reviendrons vers vous rapidement
         !

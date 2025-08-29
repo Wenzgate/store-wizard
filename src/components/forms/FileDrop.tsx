@@ -176,7 +176,7 @@ export default function FileDrop({
         className={[
           "relative flex min-h-[120px] w-full cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed p-4 text-center outline-none transition",
           drag
-            ? "border-[hsl(var(--brand))] bg-[hsl(var(--brand))/0.05]"
+            ? "border-brand bg-brand-alt"
             : "border-border hover:bg-black/5 dark:hover:bg-white/5",
           error ? "ring-2 ring-red-500/50" : "",
         ].join(" ")}
@@ -243,7 +243,7 @@ export default function FileDrop({
                   <button
                     type="button"
                     onClick={() => onRemove(idx)}
-                    className="rounded-md border border-border px-2 py-1 text-xs hover:bg-black/5 dark:hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-[hsl(var(--brand))]"
+                    className="rounded-md border border-border px-2 py-1 text-xs hover:bg-brand-alt focus:outline-none focus:ring-2 focus:ring-brand"
                     aria-label={`Supprimer ${f.name}`}
                   >
                     Supprimer
