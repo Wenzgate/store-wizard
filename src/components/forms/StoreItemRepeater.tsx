@@ -3,7 +3,7 @@
 
 import { useFieldArray, useFormContext } from "react-hook-form";
 import type { z } from "zod";
-import { QuoteRequestSchema } from "@/schemas/quote";
+import { MIN_DIM_MM, QuoteRequestSchema } from "@/schemas/quote";
 
 
 
@@ -28,7 +28,7 @@ export default function StoreItemRepeater() {
             quantity: 1,
             mount: "INSIDE",
             control: "CHAIN",
-            dims: { width: 100, height: 120 },
+            dims: { width: MIN_DIM_MM, height: MIN_DIM_MM },
             notes: "",
           } as any)
         }
