@@ -512,13 +512,25 @@ const isDebug = sp?.get("debug") === "1";
   
       // --- B. Validation stricte Zod
       const parsed = QuoteRequestSchema.safeParse(dataForServer);
-        if (!parsed.success) {
-          console.error(parsed.error.flatten());
-          setSubmitError("Certaines informations sont manquantes ou invalides. Vérifiez le formulaire.");
-          setIsSubmitting(false);
-          jumpTo("items");
-          return;
-        }
+
+      if (!parsed.success) {
+        console.error(parsed.error.flatten());
+        const issue = parsed.error.issues[0];
+        const rootPath = issue?.path?.[0];
+        const step: StepId =
+          rootPath === "customer" ||
+          rootPath === "project" ||
+          rootPath === "consentRgpd"
+            ? "contact"
+            : rootPath === "files"
+            ? "recap"
+            : "items";
+        setSubmitError(issue?.message || "Certaines informations sont manquantes ou invalides.");
+        setIsSubmitting(false);
+        jumpTo(step);
+        return;
+      }
+
 
       devLog("data.files", (data as any).files);
       devLog("item.files", (data.items ?? []).map((it) => it.files));
@@ -560,8 +572,8 @@ const isDebug = sp?.get("debug") === "1";
       track("quote_submit", { items: (parsed.data.items ?? []).length });
       localStorage.removeItem(DRAFT_KEY);
       setCurrentIdx(STEPS.findIndex((s) => s.id === "done"));
-    } catch (e: any) {
-      setSubmitError(e?.message ?? "Erreur réseau");
+    } catch (e) {
+      setSubmitError((e as any)?.message ?? "Erreur réseau");
     } finally {
       setIsSubmitting(false);
     }
