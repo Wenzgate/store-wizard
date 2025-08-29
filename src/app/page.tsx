@@ -54,10 +54,16 @@ declare global {
   }
 }
 
+const devLog = (...args: any[]) => {
+  if (process.env.NODE_ENV === "development") {
+    console.log(...args);
+  }
+};
+
 function track(event: string, payload: Record<string, unknown> = {}) {
   const data = { event, ...payload, ts: Date.now() };
   // Stub analytics
-  console.log("[track]", data);
+  devLog("[track]", data);
   window.dataLayer = window.dataLayer || [];
   window.dataLayer.push(data);
 }
@@ -530,8 +536,8 @@ const isDebug = sp?.get("debug") === "1";
         return;
       }
 
-      console.log("data.files", (data as any).files);
-console.log("item.files", (data.items ?? []).map((it) => it.files));
+      devLog("data.files", (data as any).files);
+      devLog("item.files", (data.items ?? []).map((it) => it.files));
 
   
       // --- C. Construire le FormData (JSON + fichiers)
